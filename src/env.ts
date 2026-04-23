@@ -3,10 +3,10 @@ import { z } from "zod";
 
 export const env = createEnv({
   server: {
-    DATABASE_URL: z.string().url(),
+    DATABASE_URL: z.url(),
     BETTER_AUTH_SECRET: z.string().min(1),
-    BETTER_AUTH_URL: z.string().url().default("http://localhost:3000"),
-    ADMIN_EMAIL: z.string().email().optional(),
+    BETTER_AUTH_URL: z.url().default("http://localhost:3000"),
+    ADMIN_EMAIL: z.email().optional(),
     SHIPSTATION_API_KEY_DIP: z.string().min(1),
     SHIPSTATION_API_KEY_FATASS: z.string().min(1),
     SHIPSTATION_API_KEY_RYOT: z.string().min(1),
