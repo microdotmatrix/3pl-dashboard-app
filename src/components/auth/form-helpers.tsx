@@ -1,5 +1,5 @@
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import type { AuthActionState } from "@/lib/auth/actions";
+import type { AuthActionState } from "@/lib/auth/state";
 
 export const FormStatusMessage = ({ state }: { state: AuthActionState }) => {
   if (!state.message) return null;
