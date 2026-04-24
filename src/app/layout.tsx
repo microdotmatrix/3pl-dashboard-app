@@ -1,6 +1,9 @@
-import { cn } from "@/lib/utils";
 import type { Metadata } from "next";
 import { DM_Sans, Geist, Geist_Mono } from "next/font/google";
+
+import { Toaster } from "@/components/ui/sonner";
+import { cn } from "@/lib/utils";
+
 import "./globals.css";
 
 const dmSansHeading = DM_Sans({
@@ -39,7 +42,10 @@ export default function RootLayout({
         dmSansHeading.variable,
       )}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <Toaster position="top-right" richColors closeButton />
+      </body>
     </html>
   );
 }

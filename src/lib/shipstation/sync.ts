@@ -22,6 +22,7 @@ import {
 const RESOURCE = "shipments" as const;
 const OVERLAP_MS = 2 * 60 * 1000;
 const PAGE_SIZE = 100;
+const MAX_LOOKBACK_MS = 90 * 24 * 60 * 60 * 1000;
 
 export type SyncResult = {
   accountSlug: string;
@@ -137,9 +138,12 @@ export const syncAccountShipments = async (
   });
 
   const cursor = await readCursor(account.id);
-  const modifiedAtStart = cursor
-    ? new Date(cursor.getTime() - OVERLAP_MS).toISOString()
-    : undefined;
+  const lookbackFloor = new Date(Date.now() - MAX_LOOKBACK_MS);
+  const rawStart = cursor
+    ? new Date(cursor.getTime() - OVERLAP_MS)
+    : lookbackFloor;
+  const startDate = rawStart < lookbackFloor ? lookbackFloor : rawStart;
+  const modifiedAtStart = startDate.toISOString();
 
   let upserted = 0;
   let pagesFetched = 0;

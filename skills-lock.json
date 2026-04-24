@@ -46,6 +46,11 @@
       "sourceType": "github",
       "computedHash": "2bc6cf38ec7b4a5778a43fabb3e87642c9897ad45e9eb42438b57fd2def6cca8"
     },
+    "shadcn-hooks": {
+      "source": "Debbl/shadcn-hooks",
+      "sourceType": "github",
+      "computedHash": "6b5ee3a9701f74eb192d8a63e098b78a0a0b23447ddfd2f4ef9cb5fab02c5396"
+    },
     "two-factor-authentication-best-practices": {
       "source": "better-auth/skills",
       "sourceType": "github",

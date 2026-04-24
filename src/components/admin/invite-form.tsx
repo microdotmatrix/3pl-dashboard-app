@@ -1,6 +1,5 @@
 "use client";
 
-import { useActionState } from "react";
 import { CopyButton } from "@/components/admin/copy-button";
 import { FormStatusMessage, fieldError } from "@/components/auth/form-helpers";
 import { Button } from "@/components/ui/button";
@@ -14,9 +13,10 @@ import {
 import { Input } from "@/components/ui/input";
 import {
   type AdminActionState,
-  createInviteAction,
   INITIAL_ADMIN_ACTION_STATE,
-} from "@/lib/admin/actions";
+} from "@/lib/admin/action-state";
+import { createInviteAction } from "@/lib/admin/actions";
+import { useActionState } from "react";
 
 export const InviteForm = () => {
   const [state, formAction, isPending] = useActionState<

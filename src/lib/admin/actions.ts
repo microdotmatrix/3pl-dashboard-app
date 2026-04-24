@@ -7,18 +7,10 @@ import { headers } from "next/headers";
 import { db } from "@/db";
 import { session, user } from "@/db/schema/auth";
 import { env } from "@/env";
+import type { AdminActionState } from "@/lib/admin/action-state";
 import { auth } from "@/lib/auth";
 import { requireAdmin } from "@/lib/auth/access";
 import { createInviteRecord, revokeInviteRecord } from "@/lib/auth/invites";
-
-export type AdminActionState = {
-  status: "idle" | "success" | "error";
-  message?: string;
-  fieldErrors?: Record<string, string>;
-  inviteUrl?: string;
-};
-
-export const INITIAL_ADMIN_ACTION_STATE: AdminActionState = { status: "idle" };
 
 const getString = (formData: FormData, key: string) => {
   const value = formData.get(key);

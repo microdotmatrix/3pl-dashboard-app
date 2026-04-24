@@ -29,6 +29,13 @@
       "when": 1776897000000,
       "tag": "0003_silver_adam_warlock",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1776973943983,
+      "tag": "0004_smart_talisman",
+      "breakpoints": true
     }
   ]
 }

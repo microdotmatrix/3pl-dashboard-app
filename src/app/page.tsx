@@ -1,39 +1,41 @@
-import Link from "next/link";
-
-import { SignOutButton } from "@/components/auth/sign-out-button";
-import { Button } from "@/components/ui/button";
+import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import { ShipmentsPanel } from "@/components/dashboard/shipments/shipments-panel";
+import { WhiteboardPanel } from "@/components/dashboard/whiteboard/whiteboard-panel";
 import { requireApprovedUser } from "@/lib/auth/access";
+import type { DashboardSearchParams } from "@/lib/shipments/search-params";
+import { getUnreadCount, listRecentNotes } from "@/lib/whiteboard/queries";
 
-const HomePage = async () => {
+export const dynamic = "force-dynamic";
+
+type HomePageProps = {
+  searchParams: Promise<DashboardSearchParams>;
+};
+
+const HomePage = async ({ searchParams }: HomePageProps) => {
   const ctx = await requireApprovedUser();
+  const params = (await searchParams) ?? {};
+
+  const [initialNotes, initialUnreadCount] = await Promise.all([
+    listRecentNotes(50),
+    getUnreadCount(ctx.user.id),
+  ]);
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col gap-8 px-6 py-10 sm:px-10">
-      <header className="flex items-center justify-between border-b border-border/50 pb-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
-            3PL Dashboard
-          </p>
-          <h1 className="font-heading text-xl font-semibold">
-            Welcome back, {ctx.user.name}
-          </h1>
-        </div>
-        <div className="flex items-center gap-2">
-          {ctx.user.role === "admin" ? (
-            <Button asChild variant="outline" size="sm">
-              <Link href="/admin">Admin</Link>
-            </Button>
-          ) : null}
-          <SignOutButton />
-        </div>
-      </header>
-      <section className="flex flex-col gap-3">
-        <h2 className="font-heading text-base font-medium">Shipments</h2>
-        <p className="text-xs/relaxed text-muted-foreground">
-          Shipments sync from ShipStation is wired up. A dashboard UI lands in a
-          later phase.
-        </p>
-      </section>
+    <main className="flex min-h-screen flex-1 flex-col">
+      <DashboardHeader user={ctx.user} />
+      <DashboardShell
+        initialUnreadCount={initialUnreadCount}
+        shipments={<ShipmentsPanel searchParams={params} />}
+        whiteboard={
+          <WhiteboardPanel
+            initialNotes={initialNotes}
+            initialUnreadCount={initialUnreadCount}
+            currentUserId={ctx.user.id}
+            isAdmin={ctx.user.role === "admin"}
+          />
+        }
+      />
     </main>
   );
 };

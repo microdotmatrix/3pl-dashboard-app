@@ -5,8 +5,10 @@ import { useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import {
   type AdminActionState,
-  approveUserAction,
   INITIAL_ADMIN_ACTION_STATE,
+} from "@/lib/admin/action-state";
+import {
+  approveUserAction,
   reactivateUserAction,
   rejectUserAction,
   setRoleAction,

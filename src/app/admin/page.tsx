@@ -3,6 +3,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { CopyButton } from "@/components/admin/copy-button";
 import { InviteForm } from "@/components/admin/invite-form";
 import { RevokeInviteButton } from "@/components/admin/invite-row-actions";
+import { ShipstationSyncButton } from "@/components/admin/shipstation-sync-button";
 import { UserActionButton } from "@/components/admin/user-row-actions";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -26,6 +27,7 @@ import { invite } from "@/db/schema/invites";
 import { passwordResetLink } from "@/db/schema/password-reset-links";
 import { env } from "@/env";
 import { requireAdmin } from "@/lib/auth/access";
+import { listShipstationSyncStatus } from "@/lib/shipstation/queries";
 
 type UserRow = {
   id: string;
@@ -97,7 +99,7 @@ const getLatestResetUrls = async () => {
 const AdminDashboardPage = async () => {
   const ctx = await requireAdmin();
 
-  const [users, invites, resetLinks] = await Promise.all([
+  const [users, invites, resetLinks, syncStatus] = await Promise.all([
     db
       .select({
         id: userTable.id,
@@ -135,6 +137,7 @@ const AdminDashboardPage = async () => {
       .from(invite)
       .orderBy(desc(invite.createdAt)) as Promise<InviteRow[]>,
     getLatestResetUrls(),
+    listShipstationSyncStatus(),
   ]);
 
   const resetByUser = new Map(resetLinks.map((row) => [row.userId, row]));
@@ -144,6 +147,71 @@ const AdminDashboardPage = async () => {
 
   return (
     <div className="flex flex-col gap-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>ShipStation sync</CardTitle>
+          <CardDescription>
+            Last status from <code>shipstation_sync_cursor</code>. The dashboard
+            reads shipments from Postgres, so this table must show recent
+            successful runs for data to appear.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <ShipstationSyncButton />
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Account</TableHead>
+                <TableHead>Last run</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Cursor</TableHead>
+                <TableHead>Shipments</TableHead>
+                <TableHead>Last error</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {syncStatus.map((row) => {
+                const statusLabel = row.lastStatus ?? "never run";
+                const statusClass =
+                  row.lastStatus === "ok"
+                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                    : row.lastStatus === "error"
+                      ? "bg-rose-500/10 text-rose-700 dark:text-rose-400"
+                      : "bg-slate-500/10 text-slate-700 dark:text-slate-300";
+                return (
+                  <TableRow key={row.accountId}>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{row.displayName}</span>
+                        <span className="text-muted-foreground">
+                          {row.slug}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>{formatDate(row.lastRunAt)}</TableCell>
+                    <TableCell>
+                      <Badge className={statusClass}>{statusLabel}</Badge>
+                    </TableCell>
+                    <TableCell>{formatDate(row.lastModifiedAt)}</TableCell>
+                    <TableCell>{row.shipmentCount}</TableCell>
+                    <TableCell className="max-w-md">
+                      {row.lastError ? (
+                        <pre className="whitespace-pre-wrap break-all text-[0.7rem] text-rose-600 dark:text-rose-400">
+                          {row.lastError.slice(0, 600)}
+                          {row.lastError.length > 600 ? "\u2026" : ""}
+                        </pre>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Pending approvals</CardTitle>

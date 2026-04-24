@@ -3,10 +3,8 @@
 import { useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  INITIAL_ADMIN_ACTION_STATE,
-  revokeInviteAction,
-} from "@/lib/admin/actions";
+import { INITIAL_ADMIN_ACTION_STATE } from "@/lib/admin/action-state";
+import { revokeInviteAction } from "@/lib/admin/actions";
 
 export const RevokeInviteButton = ({ inviteId }: { inviteId: string }) => {
   const [isPending, startTransition] = useTransition();
