@@ -1,0 +1,581 @@
+import "server-only";
+
+import { and, asc, desc, eq, sql } from "drizzle-orm";
+
+import { db } from "@/db";
+import {
+  monthlyBillingReport,
+  monthlyBillingReportShipment,
+} from "@/db/schema/billing";
+import {
+  shipstationAccount,
+  shipstationShipment,
+} from "@/db/schema/shipstation";
+
+import { getRequiredBillingShipmentTagNames } from "./config";
+import { matchShipmentPackages } from "./dimension-match";
+import { loadBillingRateSheet } from "./rate-sheet";
+import type {
+  BillingPackageMatch,
+  BillingReportStatus,
+  BillingShipmentMatchStatus,
+} from "./types";
+
+const BILLABLE_STATUS = "label_purchased";
+
+const moneyToStorage = (value: number) => value.toFixed(2);
+
+const moneyToNumber = (value: string) => Number(value);
+
+const normalizeShipmentTagName = (value: string) => value.trim().toLowerCase();
+
+const shipmentMatchesRequiredTags = (
+  tags: Array<{ name: string }> | null | undefined,
+  requiredTagNames: readonly string[],
+) => {
+  if (requiredTagNames.length === 0) {
+    return true;
+  }
+
+  const tagNames = new Set(
+    (tags ?? []).map((tag) => normalizeShipmentTagName(tag.name)),
+  );
+
+  return requiredTagNames.every((tagName) =>
+    tagNames.has(normalizeShipmentTagName(tagName)),
+  );
+};
+
+const makePeriod = (year: number, month: number) => {
+  if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+    throw new Error("Year must be a four-digit number.");
+  }
+
+  if (!Number.isInteger(month) || month < 1 || month > 12) {
+    throw new Error("Month must be between 1 and 12.");
+  }
+
+  const periodStart = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
+  const periodEnd = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+
+  return { periodStart, periodEnd };
+};
+
+const billableDateSql = sql`coalesce(${shipstationShipment.shipDate}, ${shipstationShipment.createdAtRemote})`;
+
+const resolveAccount = async (accountSlug: string) => {
+  const [account] = await db
+    .select({
+      id: shipstationAccount.id,
+      slug: shipstationAccount.slug,
+      displayName: shipstationAccount.displayName,
+    })
+    .from(shipstationAccount)
+    .where(eq(shipstationAccount.slug, accountSlug))
+    .limit(1);
+
+  if (!account) {
+    throw new Error(`Unknown ShipStation account "${accountSlug}".`);
+  }
+
+  return account;
+};
+
+const findReportByPeriod = async ({
+  accountId,
+  periodStart,
+  periodEnd,
+}: {
+  accountId: string;
+  periodStart: Date;
+  periodEnd: Date;
+}) => {
+  const [report] = await db
+    .select()
+    .from(monthlyBillingReport)
+    .where(
+      and(
+        eq(monthlyBillingReport.accountId, accountId),
+        eq(monthlyBillingReport.periodStart, periodStart),
+        eq(monthlyBillingReport.periodEnd, periodEnd),
+      ),
+    )
+    .limit(1);
+
+  return report ?? null;
+};
+
+const insertShipmentRows = async (
+  rows: Array<typeof monthlyBillingReportShipment.$inferInsert>,
+) => {
+  if (rows.length === 0) {
+    return;
+  }
+
+  const chunkSize = 250;
+
+  for (let index = 0; index < rows.length; index += chunkSize) {
+    await db
+      .insert(monthlyBillingReportShipment)
+      .values(rows.slice(index, index + chunkSize));
+  }
+};
+
+const formatPeriodLabel = (date: Date) =>
+  new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  }).format(date);
+
+const formatDate = (date: Date | null) =>
+  date
+    ? new Intl.DateTimeFormat("en-US", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(date)
+    : "";
+
+const escapeCsv = (value: string | number | null | undefined) => {
+  const text = value === null || value === undefined ? "" : String(value);
+  if (!/[",\n]/.test(text)) {
+    return text;
+  }
+
+  return `"${text.replaceAll('"', '""')}"`;
+};
+
+export type MonthlyBillingReportListRow = {
+  id: string;
+  account: {
+    id: string;
+    slug: string;
+    displayName: string;
+  };
+  periodStart: Date;
+  periodEnd: Date;
+  status: BillingReportStatus;
+  shipmentCount: number;
+  packageCount: number;
+  packagingCostTotal: number;
+  unmatchedShipmentCount: number;
+  generatedAt: Date;
+  finalizedAt: Date | null;
+};
+
+export type MonthlyBillingReportDetailRow = {
+  id: string;
+  shipmentId: string | null;
+  externalId: string;
+  shipDate: Date | null;
+  status: string;
+  packageCount: number;
+  packagingCostTotal: number;
+  matchStatus: BillingShipmentMatchStatus;
+  packageMatches: BillingPackageMatch[];
+};
+
+export type MonthlyBillingReportDetail = {
+  report: {
+    id: string;
+    account: {
+      id: string;
+      slug: string;
+      displayName: string;
+    };
+    periodStart: Date;
+    periodEnd: Date;
+    status: BillingReportStatus;
+    sheetSourceHash: string;
+    shipmentCount: number;
+    packageCount: number;
+    packagingCostTotal: number;
+    unmatchedShipmentCount: number;
+    generatedAt: Date;
+    finalizedAt: Date | null;
+  };
+  shipments: MonthlyBillingReportDetailRow[];
+};
+
+export const generateMonthlyBillingReport = async ({
+  accountSlug,
+  year,
+  month,
+}: {
+  accountSlug: string;
+  year: number;
+  month: number;
+}) => {
+  const account = await resolveAccount(accountSlug);
+  const { periodStart, periodEnd } = makePeriod(year, month);
+  const existing = await findReportByPeriod({
+    accountId: account.id,
+    periodStart,
+    periodEnd,
+  });
+
+  if (existing?.status === "finalized") {
+    throw new Error(
+      `The ${formatPeriodLabel(periodStart)} report for ${account.displayName} has already been finalized.`,
+    );
+  }
+
+  const { sheetSourceHash, rateRows } = await loadBillingRateSheet(
+    account.slug,
+  );
+  const requiredTagNames = getRequiredBillingShipmentTagNames(account.slug);
+
+  const shipments = await db
+    .select({
+      id: shipstationShipment.id,
+      externalId: shipstationShipment.externalId,
+      shipDate: shipstationShipment.shipDate,
+      createdAtRemote: shipstationShipment.createdAtRemote,
+      status: shipstationShipment.status,
+      tags: shipstationShipment.tags,
+      packageCount: shipstationShipment.packageCount,
+      raw: shipstationShipment.raw,
+    })
+    .from(shipstationShipment)
+    .where(
+      and(
+        eq(shipstationShipment.accountId, account.id),
+        eq(shipstationShipment.status, BILLABLE_STATUS),
+        sql`${billableDateSql} >= ${periodStart}`,
+        sql`${billableDateSql} < ${periodEnd}`,
+      ),
+    )
+    .orderBy(asc(billableDateSql), asc(shipstationShipment.id));
+
+  const evaluated = shipments
+    .filter((shipment) =>
+      shipmentMatchesRequiredTags(shipment.tags, requiredTagNames),
+    )
+    .map((shipment) => {
+      const rawPackages =
+        shipment.raw &&
+        typeof shipment.raw === "object" &&
+        "packages" in shipment.raw
+          ? (shipment.raw as { packages?: unknown }).packages
+          : null;
+
+      const evaluation = matchShipmentPackages({
+        packages: rawPackages,
+        fallbackPackageCount: shipment.packageCount,
+        rateRows,
+      });
+
+      return {
+        shipment,
+        evaluation,
+        billableDate: shipment.shipDate ?? shipment.createdAtRemote,
+      };
+    });
+
+  const shipmentCount = evaluated.length;
+  const packageCount = evaluated.reduce(
+    (sum, entry) => sum + entry.evaluation.packageCount,
+    0,
+  );
+  const packagingCostTotal = evaluated.reduce(
+    (sum, entry) => sum + entry.evaluation.packagingCostTotal,
+    0,
+  );
+  const unmatchedShipmentCount = evaluated.filter(
+    (entry) => entry.evaluation.matchStatus !== "matched",
+  ).length;
+
+  const reportId =
+    existing?.id ??
+    (
+      await db
+        .insert(monthlyBillingReport)
+        .values({
+          accountId: account.id,
+          periodStart,
+          periodEnd,
+          status: "draft",
+          sheetSourceHash,
+          shipmentCount: 0,
+          packageCount: 0,
+          packagingCostTotal: "0",
+          unmatchedShipmentCount: 0,
+          generatedAt: new Date(),
+          finalizedAt: null,
+        })
+        .returning({ id: monthlyBillingReport.id })
+    )[0]?.id;
+
+  if (!reportId) {
+    throw new Error("Failed to create the monthly billing report.");
+  }
+
+  await db
+    .delete(monthlyBillingReportShipment)
+    .where(eq(monthlyBillingReportShipment.reportId, reportId));
+
+  await insertShipmentRows(
+    evaluated.map(({ shipment, evaluation, billableDate }) => ({
+      reportId,
+      shipmentId: shipment.id,
+      externalId: shipment.externalId,
+      shipDate: billableDate,
+      status: shipment.status,
+      packageCount: evaluation.packageCount,
+      packagingCostTotal: moneyToStorage(evaluation.packagingCostTotal),
+      matchStatus: evaluation.matchStatus,
+      packageMatches: evaluation.packageMatches,
+    })),
+  );
+
+  await db
+    .update(monthlyBillingReport)
+    .set({
+      status: "draft",
+      sheetSourceHash,
+      shipmentCount,
+      packageCount,
+      packagingCostTotal: moneyToStorage(packagingCostTotal),
+      unmatchedShipmentCount,
+      generatedAt: new Date(),
+      finalizedAt: null,
+    })
+    .where(eq(monthlyBillingReport.id, reportId));
+
+  return getMonthlyBillingReport({ reportId });
+};
+
+export const finalizeMonthlyBillingReport = async ({
+  reportId,
+}: {
+  reportId: string;
+}) => {
+  const report = await getMonthlyBillingReport({ reportId });
+
+  if (report.report.status === "finalized") {
+    return report;
+  }
+
+  if (report.report.unmatchedShipmentCount > 0) {
+    throw new Error(
+      "Resolve unmatched shipments before finalizing this monthly report.",
+    );
+  }
+
+  await db
+    .update(monthlyBillingReport)
+    .set({
+      status: "finalized",
+      finalizedAt: new Date(),
+    })
+    .where(eq(monthlyBillingReport.id, reportId));
+
+  return getMonthlyBillingReport({ reportId });
+};
+
+export const listMonthlyBillingReports = async ({
+  accountSlug,
+}: {
+  accountSlug?: string;
+} = {}): Promise<MonthlyBillingReportListRow[]> => {
+  const baseQuery = db
+    .select({
+      id: monthlyBillingReport.id,
+      periodStart: monthlyBillingReport.periodStart,
+      periodEnd: monthlyBillingReport.periodEnd,
+      status: monthlyBillingReport.status,
+      shipmentCount: monthlyBillingReport.shipmentCount,
+      packageCount: monthlyBillingReport.packageCount,
+      packagingCostTotal: monthlyBillingReport.packagingCostTotal,
+      unmatchedShipmentCount: monthlyBillingReport.unmatchedShipmentCount,
+      generatedAt: monthlyBillingReport.generatedAt,
+      finalizedAt: monthlyBillingReport.finalizedAt,
+      account: {
+        id: shipstationAccount.id,
+        slug: shipstationAccount.slug,
+        displayName: shipstationAccount.displayName,
+      },
+    })
+    .from(monthlyBillingReport)
+    .innerJoin(
+      shipstationAccount,
+      eq(monthlyBillingReport.accountId, shipstationAccount.id),
+    );
+
+  const rows = await (accountSlug
+    ? baseQuery.where(eq(shipstationAccount.slug, accountSlug))
+    : baseQuery
+  ).orderBy(
+    desc(monthlyBillingReport.periodStart),
+    asc(shipstationAccount.slug),
+  );
+
+  return rows.map((row) => ({
+    ...row,
+    status: row.status as BillingReportStatus,
+    packagingCostTotal: moneyToNumber(row.packagingCostTotal),
+  }));
+};
+
+export const getMonthlyBillingReport = async ({
+  reportId,
+}: {
+  reportId: string;
+}): Promise<MonthlyBillingReportDetail> => {
+  const [reportRow] = await db
+    .select({
+      id: monthlyBillingReport.id,
+      periodStart: monthlyBillingReport.periodStart,
+      periodEnd: monthlyBillingReport.periodEnd,
+      status: monthlyBillingReport.status,
+      sheetSourceHash: monthlyBillingReport.sheetSourceHash,
+      shipmentCount: monthlyBillingReport.shipmentCount,
+      packageCount: monthlyBillingReport.packageCount,
+      packagingCostTotal: monthlyBillingReport.packagingCostTotal,
+      unmatchedShipmentCount: monthlyBillingReport.unmatchedShipmentCount,
+      generatedAt: monthlyBillingReport.generatedAt,
+      finalizedAt: monthlyBillingReport.finalizedAt,
+      account: {
+        id: shipstationAccount.id,
+        slug: shipstationAccount.slug,
+        displayName: shipstationAccount.displayName,
+      },
+    })
+    .from(monthlyBillingReport)
+    .innerJoin(
+      shipstationAccount,
+      eq(monthlyBillingReport.accountId, shipstationAccount.id),
+    )
+    .where(eq(monthlyBillingReport.id, reportId))
+    .limit(1);
+
+  if (!reportRow) {
+    throw new Error("Monthly billing report not found.");
+  }
+
+  const shipmentRows = await db
+    .select({
+      id: monthlyBillingReportShipment.id,
+      shipmentId: monthlyBillingReportShipment.shipmentId,
+      externalId: monthlyBillingReportShipment.externalId,
+      shipDate: monthlyBillingReportShipment.shipDate,
+      status: monthlyBillingReportShipment.status,
+      packageCount: monthlyBillingReportShipment.packageCount,
+      packagingCostTotal: monthlyBillingReportShipment.packagingCostTotal,
+      matchStatus: monthlyBillingReportShipment.matchStatus,
+      packageMatches: monthlyBillingReportShipment.packageMatches,
+    })
+    .from(monthlyBillingReportShipment)
+    .where(eq(monthlyBillingReportShipment.reportId, reportId))
+    .orderBy(
+      sql`${monthlyBillingReportShipment.shipDate} asc nulls last`,
+      asc(monthlyBillingReportShipment.externalId),
+    );
+
+  return {
+    report: {
+      ...reportRow,
+      status: reportRow.status as BillingReportStatus,
+      packagingCostTotal: moneyToNumber(reportRow.packagingCostTotal),
+    },
+    shipments: shipmentRows.map((row) => ({
+      ...row,
+      packagingCostTotal: moneyToNumber(row.packagingCostTotal),
+      matchStatus: row.matchStatus as BillingShipmentMatchStatus,
+      packageMatches: row.packageMatches as BillingPackageMatch[],
+    })),
+  };
+};
+
+export const getMonthlyBillingReportForPeriod = async ({
+  accountSlug,
+  year,
+  month,
+}: {
+  accountSlug: string;
+  year: number;
+  month: number;
+}) => {
+  const account = await resolveAccount(accountSlug);
+  const { periodStart, periodEnd } = makePeriod(year, month);
+  const existing = await findReportByPeriod({
+    accountId: account.id,
+    periodStart,
+    periodEnd,
+  });
+
+  if (!existing) {
+    return null;
+  }
+
+  return getMonthlyBillingReport({ reportId: existing.id });
+};
+
+export const exportMonthlyBillingReportCsv = async ({
+  reportId,
+}: {
+  reportId: string;
+}) => {
+  const report = await getMonthlyBillingReport({ reportId });
+
+  const lines = [
+    ["Client", report.report.account.displayName],
+    ["Account slug", report.report.account.slug],
+    ["Period", formatPeriodLabel(report.report.periodStart)],
+    ["Status", report.report.status],
+    ["Generated at", formatDate(report.report.generatedAt)],
+    ["Finalized at", formatDate(report.report.finalizedAt)],
+    ["Shipment count", report.report.shipmentCount],
+    ["Package count", report.report.packageCount],
+    ["Packaging cost total", report.report.packagingCostTotal.toFixed(2)],
+    ["Unmatched shipment count", report.report.unmatchedShipmentCount],
+    [],
+    [
+      "Shipment external ID",
+      "Billable date",
+      "Shipment status",
+      "Match status",
+      "Package count",
+      "Packaging cost",
+      "Package details",
+    ],
+    ...report.shipments.map((shipment) => [
+      shipment.externalId,
+      shipment.shipDate ? shipment.shipDate.toISOString() : "",
+      shipment.status,
+      shipment.matchStatus,
+      shipment.packageCount,
+      shipment.packagingCostTotal.toFixed(2),
+      shipment.packageMatches
+        .map((match) => {
+          const dims = [
+            match.originalDimensions.length,
+            match.originalDimensions.width,
+            match.originalDimensions.height,
+          ]
+            .map((value) => (value === null ? "?" : String(value)))
+            .join("x");
+          if (match.pricingSource === "exact") {
+            return `#${match.packageIndex}: ${match.ruleLabel} @ ${match.costApplied.toFixed(2)} (${dims})`;
+          }
+
+          if (match.pricingSource === "fallback") {
+            return `#${match.packageIndex}: estimated fallback @ ${match.costApplied.toFixed(2)} (${dims}) ${match.reason ?? ""}`.trim();
+          }
+
+          return `#${match.packageIndex}: ${match.reason ?? "unmatched"} (${dims})`;
+        })
+        .join(" | "),
+    ]),
+  ];
+
+  const csv = lines
+    .map((row) => row.map((cell) => escapeCsv(cell)).join(","))
+    .join("\n");
+  const fileName = `monthly-billing-${report.report.account.slug}-${report.report.periodStart.toISOString().slice(0, 7)}.csv`;
+
+  return {
+    csv,
+    fileName,
+  };
+};

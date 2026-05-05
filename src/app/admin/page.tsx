@@ -1,4 +1,5 @@
 import { desc, eq, sql } from "drizzle-orm";
+import Link from "next/link";
 
 import { CopyButton } from "@/components/admin/copy-button";
 import { InviteForm } from "@/components/admin/invite-form";
@@ -6,6 +7,7 @@ import { RevokeInviteButton } from "@/components/admin/invite-row-actions";
 import { ShipstationSyncButton } from "@/components/admin/shipstation-sync-button";
 import { UserActionButton } from "@/components/admin/user-row-actions";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -147,6 +149,21 @@ const AdminDashboardPage = async () => {
 
   return (
     <div className="flex flex-col gap-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Monthly billing reports</CardTitle>
+          <CardDescription>
+            Generate, review, export, and finalize client month-end packaging
+            reports from the synced ShipStation shipment ledger.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button asChild size="sm">
+            <Link href="/admin/reports/monthly">Open monthly reports</Link>
+          </Button>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>ShipStation sync</CardTitle>

@@ -11,6 +11,8 @@ export const env = createEnv({
     SHIPSTATION_API_KEY_FATASS: z.string().min(1),
     SHIPSTATION_API_KEY_RYOT: z.string().min(1),
     CRON_SECRET: z.string().min(16),
+    BILLING_RATES_SPREADSHEET_ID: z.string().min(1).optional(),
+    BILLING_RATES_GID: z.string().min(1).optional(),
   },
   client: {},
   runtimeEnv: {
@@ -22,5 +24,7 @@ export const env = createEnv({
     SHIPSTATION_API_KEY_FATASS: process.env.SHIPSTATION_API_KEY_FATASS,
     SHIPSTATION_API_KEY_RYOT: process.env.SHIPSTATION_API_KEY_RYOT,
     CRON_SECRET: process.env.CRON_SECRET,
+    BILLING_RATES_SPREADSHEET_ID: process.env.BILLING_RATES_SPREADSHEET_ID,
+    BILLING_RATES_GID: process.env.BILLING_RATES_GID,
   },
 });
