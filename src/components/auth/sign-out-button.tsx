@@ -1,5 +1,7 @@
 "use client";
 
+import { Logout01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -20,7 +22,7 @@ type SignOutButtonProps = {
 
 export const SignOutButton = ({
   variant = "outline",
-  size = "sm",
+  size = "lg",
   className,
   children,
 }: SignOutButtonProps) => {
@@ -39,7 +41,14 @@ export const SignOutButton = ({
         })
       }
     >
-      {isPending ? "Signing out\u2026" : (children ?? "Sign out")}
+      {isPending
+        ? "Signing out\u2026"
+        : (children ?? (
+            <>
+              <HugeiconsIcon icon={Logout01Icon} size={14} aria-hidden />
+              Sign out
+            </>
+          ))}
     </Button>
   );
 };

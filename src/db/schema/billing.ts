@@ -74,6 +74,7 @@ export const monthlyBillingReportShipment = pgTable(
     externalShipmentId: text("external_shipment_id"),
     shipDate: timestamp("ship_date", { withTimezone: true }),
     status: text("status").notNull(),
+    unitsPicked: integer("units_picked"),
     packageCount: integer("package_count").notNull().default(0),
     packagingCostTotal: numeric("packaging_cost_total", {
       precision: 12,

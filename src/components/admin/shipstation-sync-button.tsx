@@ -23,10 +23,16 @@ export const ShipstationSyncButton = () => {
 
   const summary = lastResult
     ? lastResult.results
-        .map(
-          (r) =>
-            `${r.accountSlug}: ${r.error ? `error (${r.error.slice(0, 80)}${r.error.length > 80 ? "\u2026" : ""})` : `${r.upserted} upserted, ${r.pagesFetched} pages`}`,
-        )
+        .map((r) => {
+          if (r.error) {
+            return `${r.accountSlug}: error (${r.error.slice(0, 80)}${r.error.length > 80 ? "\u2026" : ""})`;
+          }
+
+          const backfilled =
+            r.shipmentNumbersBackfilled + r.reportShipmentNumbersBackfilled;
+
+          return `${r.accountSlug}: ${r.upserted} upserted, ${r.pagesFetched} pages${backfilled > 0 ? `, ${backfilled} shipment # backfilled` : ""}`;
+        })
         .join("  \u00b7  ")
     : null;
 

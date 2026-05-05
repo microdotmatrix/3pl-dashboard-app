@@ -245,17 +245,87 @@ const MonthlyReportsPage = async ({
 
       {currentReport ? (
         <>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div
+            className={`grid gap-4 md:grid-cols-2 ${
+              currentReport.report.orderChannelSummary
+                ? "xl:grid-cols-4"
+                : "xl:grid-cols-5"
+            }`}
+          >
+            {currentReport.report.orderChannelSummary ? (
+              <>
+                <Card size="sm">
+                  <CardHeader>
+                    <CardTitle>B2B shipments</CardTitle>
+                    <CardDescription>
+                      Shipment # starts with <code>B2B</code>
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="font-heading text-2xl font-semibold">
+                      {
+                        currentReport.report.orderChannelSummary
+                          .b2bShipmentCount
+                      }
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card size="sm">
+                  <CardHeader>
+                    <CardTitle>D2C shipments</CardTitle>
+                    <CardDescription>
+                      Shipment # does not start with <code>B2B</code>
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="font-heading text-2xl font-semibold">
+                      {
+                        currentReport.report.orderChannelSummary
+                          .d2cShipmentCount
+                      }
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card size="sm">
+                  <CardHeader>
+                    <CardTitle>Total shipments</CardTitle>
+                    <CardDescription>
+                      {monthFormatter.format(currentReport.report.periodStart)}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="font-heading text-2xl font-semibold">
+                      {
+                        currentReport.report.orderChannelSummary
+                          .totalShipmentCount
+                      }
+                    </p>
+                  </CardContent>
+                </Card>
+              </>
+            ) : (
+              <Card size="sm">
+                <CardHeader>
+                  <CardTitle>Shipment count</CardTitle>
+                  <CardDescription>
+                    {monthFormatter.format(currentReport.report.periodStart)}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="font-heading text-2xl font-semibold">
+                    {currentReport.report.shipmentCount}
+                  </p>
+                </CardContent>
+              </Card>
+            )}
             <Card size="sm">
               <CardHeader>
-                <CardTitle>Shipment count</CardTitle>
-                <CardDescription>
-                  {monthFormatter.format(currentReport.report.periodStart)}
-                </CardDescription>
+                <CardTitle>Units picked</CardTitle>
+                <CardDescription>Sum of line-item quantities</CardDescription>
               </CardHeader>
               <CardContent>
                 <p className="font-heading text-2xl font-semibold">
-                  {currentReport.report.shipmentCount}
+                  {currentReport.report.unitsPickedTotal}
                 </p>
               </CardContent>
             </Card>
@@ -333,8 +403,9 @@ const MonthlyReportsPage = async ({
                     <TableHead>Shipment</TableHead>
                     <TableHead>Billable date</TableHead>
                     <TableHead>Shipment #</TableHead>
-                    <TableHead>Order ID</TableHead>
+                    <TableHead className="hidden">Order ID</TableHead>
                     <TableHead>Match</TableHead>
+                    <TableHead>Units picked</TableHead>
                     <TableHead>Packages</TableHead>
                     <TableHead>Packaging total</TableHead>
                     <TableHead className="min-w-[320px] whitespace-normal">
@@ -354,7 +425,7 @@ const MonthlyReportsPage = async ({
                         <TableCell className="font-mono text-[0.7rem] text-muted-foreground">
                           {shipment.shipmentNumber ?? "—"}
                         </TableCell>
-                        <TableCell className="font-mono text-[0.7rem] text-muted-foreground">
+                        <TableCell className="hidden font-mono text-[0.7rem] text-muted-foreground">
                           {shipment.externalShipmentId ?? "—"}
                         </TableCell>
                         <TableCell>
@@ -364,6 +435,7 @@ const MonthlyReportsPage = async ({
                             {shipment.matchStatus}
                           </span>
                         </TableCell>
+                        <TableCell>{shipment.unitsPicked}</TableCell>
                         <TableCell>{shipment.packageCount}</TableCell>
                         <TableCell>
                           {currencyFormatter.format(
@@ -388,7 +460,7 @@ const MonthlyReportsPage = async ({
                   {currentReport.shipments.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={8}
+                        colSpan={9}
                         className="whitespace-normal text-muted-foreground"
                       >
                         No billable shipments landed in this month for{" "}

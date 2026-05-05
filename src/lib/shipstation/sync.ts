@@ -1,8 +1,12 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { db } from "@/db";
+import {
+  monthlyBillingReport,
+  monthlyBillingReportShipment,
+} from "@/db/schema/billing";
 import {
   type ShipstationShipment,
   shipstationShipment,
@@ -29,6 +33,8 @@ export type SyncResult = {
   upserted: number;
   pagesFetched: number;
   cursorAdvancedTo: string | null;
+  shipmentNumbersBackfilled: number;
+  reportShipmentNumbersBackfilled: number;
   error: string | null;
 };
 
@@ -118,6 +124,56 @@ const writeCursor = async (
     });
 };
 
+const backfillShipmentNumbersFromRaw = async (accountId: string) => {
+  const rows = await db
+    .update(shipstationShipment)
+    .set({
+      shipmentNumber: sql`nullif(${shipstationShipment.raw}->>'shipment_number', '')`,
+      syncedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(shipstationShipment.accountId, accountId),
+        sql`${shipstationShipment.shipmentNumber} is null`,
+        sql`nullif(${shipstationShipment.raw}->>'shipment_number', '') is not null`,
+      ),
+    )
+    .returning({ id: shipstationShipment.id });
+
+  return rows.length;
+};
+
+const backfillDraftReportShipmentNumbers = async (accountId: string) => {
+  const rows = await db
+    .update(monthlyBillingReportShipment)
+    .set({
+      shipmentNumber: sql`(
+        select ${shipstationShipment.shipmentNumber}
+        from ${shipstationShipment}
+        where ${shipstationShipment.id} = ${monthlyBillingReportShipment.shipmentId}
+      )`,
+    })
+    .where(
+      and(
+        sql`${monthlyBillingReportShipment.shipmentNumber} is null`,
+        sql`${monthlyBillingReportShipment.shipmentId} is not null`,
+        sql`exists (
+          select 1
+          from ${monthlyBillingReport}
+          inner join ${shipstationShipment}
+            on ${shipstationShipment.id} = ${monthlyBillingReportShipment.shipmentId}
+          where ${monthlyBillingReport.id} = ${monthlyBillingReportShipment.reportId}
+            and ${monthlyBillingReport.accountId} = ${accountId}
+            and ${monthlyBillingReport.status} = 'draft'
+            and ${shipstationShipment.shipmentNumber} is not null
+        )`,
+      ),
+    )
+    .returning({ id: monthlyBillingReportShipment.id });
+
+  return rows.length;
+};
+
 export const syncAccountShipments = async (
   slug: string,
 ): Promise<SyncResult> => {
@@ -129,6 +185,8 @@ export const syncAccountShipments = async (
       upserted: 0,
       pagesFetched: 0,
       cursorAdvancedTo: null,
+      shipmentNumbersBackfilled: 0,
+      reportShipmentNumbersBackfilled: 0,
       error: `Unknown account slug "${slug}"`,
     };
   }
@@ -149,8 +207,14 @@ export const syncAccountShipments = async (
   let upserted = 0;
   let pagesFetched = 0;
   let maxModifiedAt = cursor;
+  let shipmentNumbersBackfilled = 0;
+  let reportShipmentNumbersBackfilled = 0;
 
   try {
+    shipmentNumbersBackfilled = await backfillShipmentNumbersFromRaw(
+      account.id,
+    );
+
     let page: Awaited<ReturnType<typeof client.listShipments>> =
       await client.listShipments({
         modifiedAtStart,
@@ -175,7 +239,7 @@ export const syncAccountShipments = async (
               shipstationShipment.externalId,
             ],
             set: {
-              shipmentNumber: row.shipmentNumber,
+              shipmentNumber: sql`coalesce(excluded.shipment_number, ${shipstationShipment.shipmentNumber})`,
               externalShipmentId: row.externalShipmentId,
               status: row.status,
               carrierId: row.carrierId,
@@ -213,6 +277,10 @@ export const syncAccountShipments = async (
       page = await client.listShipmentsByUrl(nextHref);
     }
 
+    reportShipmentNumbersBackfilled = await backfillDraftReportShipmentNumbers(
+      account.id,
+    );
+
     await writeCursor(account.id, maxModifiedAt, "ok", null);
 
     return {
@@ -220,6 +288,8 @@ export const syncAccountShipments = async (
       upserted,
       pagesFetched,
       cursorAdvancedTo: maxModifiedAt?.toISOString() ?? null,
+      shipmentNumbersBackfilled,
+      reportShipmentNumbersBackfilled,
       error: null,
     };
   } catch (error) {
@@ -231,6 +301,8 @@ export const syncAccountShipments = async (
       upserted,
       pagesFetched,
       cursorAdvancedTo: null,
+      shipmentNumbersBackfilled,
+      reportShipmentNumbersBackfilled,
       error: message,
     };
   }

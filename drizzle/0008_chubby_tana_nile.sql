@@ -1,0 +1,1 @@
+ALTER TABLE "monthly_billing_report_shipment" ADD COLUMN "units_picked" integer;

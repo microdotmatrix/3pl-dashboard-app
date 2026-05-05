@@ -1,7 +1,7 @@
-import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { ShipmentsPanel } from "@/components/dashboard/shipments/shipments-panel";
 import { WhiteboardPanel } from "@/components/dashboard/whiteboard/whiteboard-panel";
+import { AppHeader } from "@/components/layout/app-header";
 import { requireApprovedUser } from "@/lib/auth/access";
 import type { DashboardSearchParams } from "@/lib/shipments/search-params";
 import { getUnreadCount, listRecentNotes } from "@/lib/whiteboard/queries";
@@ -23,7 +23,7 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
 
   return (
     <main className="flex min-h-screen flex-1 flex-col">
-      <DashboardHeader user={ctx.user} />
+      <AppHeader user={ctx.user} />
       <DashboardShell
         initialUnreadCount={initialUnreadCount}
         shipments={<ShipmentsPanel searchParams={params} />}

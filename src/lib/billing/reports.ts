@@ -22,12 +22,61 @@ import type {
 } from "./types";
 
 const BILLABLE_STATUS = "label_purchased";
+const RYOT_B2B_PREFIX = "B2B";
 
 const moneyToStorage = (value: number) => value.toFixed(2);
 
 const moneyToNumber = (value: string) => Number(value);
 
 const normalizeShipmentTagName = (value: string) => value.trim().toLowerCase();
+
+const parseNumericValue = (value: unknown) => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+};
+
+const getUnitsPickedFromRawShipment = (raw: unknown) => {
+  if (!raw || typeof raw !== "object" || !("items" in raw)) {
+    return 0;
+  }
+
+  const items = (raw as { items?: unknown }).items;
+  if (!Array.isArray(items)) {
+    return 0;
+  }
+
+  return items.reduce((sum, item) => {
+    if (!item || typeof item !== "object") {
+      return sum;
+    }
+
+    const quantity = parseNumericValue(
+      (item as { quantity?: unknown }).quantity,
+    );
+    if (quantity === null || quantity <= 0) {
+      return sum;
+    }
+
+    const unitPrice = parseNumericValue(
+      (item as { unit_price?: unknown }).unit_price,
+    );
+
+    // ShipStation can include adjustment rows like discounts in `items`.
+    if (unitPrice !== null && unitPrice < 0) {
+      return sum;
+    }
+
+    return sum + quantity;
+  }, 0);
+};
 
 const shipmentMatchesRequiredTags = (
   tags: Array<{ name: string }> | null | undefined,
@@ -171,6 +220,7 @@ export type MonthlyBillingReportDetailRow = {
   externalShipmentId: string | null;
   shipDate: Date | null;
   status: string;
+  unitsPicked: number;
   packageCount: number;
   packagingCostTotal: number;
   matchStatus: BillingShipmentMatchStatus;
@@ -190,13 +240,44 @@ export type MonthlyBillingReportDetail = {
     status: BillingReportStatus;
     sheetSourceHash: string;
     shipmentCount: number;
+    unitsPickedTotal: number;
     packageCount: number;
     packagingCostTotal: number;
     unmatchedShipmentCount: number;
+    orderChannelSummary: {
+      b2bShipmentCount: number;
+      d2cShipmentCount: number;
+      totalShipmentCount: number;
+    } | null;
     generatedAt: Date;
     finalizedAt: Date | null;
   };
   shipments: MonthlyBillingReportDetailRow[];
+};
+
+const hasRyotB2bShipmentPrefix = (shipmentNumber: string | null) =>
+  shipmentNumber?.trim().toUpperCase().startsWith(RYOT_B2B_PREFIX) ?? false;
+
+const buildOrderChannelSummary = ({
+  accountSlug,
+  shipments,
+}: {
+  accountSlug: string;
+  shipments: Array<{ shipmentNumber: string | null }>;
+}) => {
+  if (accountSlug !== "ryot") {
+    return null;
+  }
+
+  const b2bShipmentCount = shipments.filter((shipment) =>
+    hasRyotB2bShipmentPrefix(shipment.shipmentNumber),
+  ).length;
+
+  return {
+    b2bShipmentCount,
+    d2cShipmentCount: shipments.length - b2bShipmentCount,
+    totalShipmentCount: shipments.length,
+  };
 };
 
 export const generateMonthlyBillingReport = async ({
@@ -273,6 +354,7 @@ export const generateMonthlyBillingReport = async ({
         shipment,
         evaluation,
         billableDate: shipment.shipDate ?? shipment.createdAtRemote,
+        unitsPicked: getUnitsPickedFromRawShipment(shipment.raw),
       };
     });
 
@@ -319,7 +401,7 @@ export const generateMonthlyBillingReport = async ({
     .where(eq(monthlyBillingReportShipment.reportId, reportId));
 
   await insertShipmentRows(
-    evaluated.map(({ shipment, evaluation, billableDate }) => ({
+    evaluated.map(({ shipment, evaluation, billableDate, unitsPicked }) => ({
       reportId,
       shipmentId: shipment.id,
       externalId: shipment.externalId,
@@ -327,6 +409,7 @@ export const generateMonthlyBillingReport = async ({
       externalShipmentId: shipment.externalShipmentId ?? null,
       shipDate: billableDate,
       status: shipment.status,
+      unitsPicked,
       packageCount: evaluation.packageCount,
       packagingCostTotal: moneyToStorage(evaluation.packagingCostTotal),
       matchStatus: evaluation.matchStatus,
@@ -408,10 +491,9 @@ export const listMonthlyBillingReports = async ({
       eq(monthlyBillingReport.accountId, shipstationAccount.id),
     );
 
-  const rows = await (
-    accountSlug
-      ? baseQuery.where(eq(shipstationAccount.slug, accountSlug))
-      : baseQuery
+  const rows = await (accountSlug
+    ? baseQuery.where(eq(shipstationAccount.slug, accountSlug))
+    : baseQuery
   ).orderBy(
     desc(monthlyBillingReport.periodStart),
     asc(shipstationAccount.slug),
@@ -469,30 +551,55 @@ export const getMonthlyBillingReport = async ({
       externalShipmentId: monthlyBillingReportShipment.externalShipmentId,
       shipDate: monthlyBillingReportShipment.shipDate,
       status: monthlyBillingReportShipment.status,
+      unitsPicked: monthlyBillingReportShipment.unitsPicked,
       packageCount: monthlyBillingReportShipment.packageCount,
       packagingCostTotal: monthlyBillingReportShipment.packagingCostTotal,
       matchStatus: monthlyBillingReportShipment.matchStatus,
       packageMatches: monthlyBillingReportShipment.packageMatches,
+      raw: shipstationShipment.raw,
     })
     .from(monthlyBillingReportShipment)
+    .leftJoin(
+      shipstationShipment,
+      eq(monthlyBillingReportShipment.shipmentId, shipstationShipment.id),
+    )
     .where(eq(monthlyBillingReportShipment.reportId, reportId))
     .orderBy(
       sql`${monthlyBillingReportShipment.shipDate} asc nulls last`,
       asc(monthlyBillingReportShipment.externalId),
     );
 
+  const orderChannelSummary = buildOrderChannelSummary({
+    accountSlug: reportRow.account.slug,
+    shipments: shipmentRows,
+  });
+
+  const shipments = shipmentRows.map((row) => {
+    const { raw, ...shipment } = row;
+
+    return {
+      ...shipment,
+      unitsPicked: row.unitsPicked ?? getUnitsPickedFromRawShipment(raw),
+      packagingCostTotal: moneyToNumber(row.packagingCostTotal),
+      matchStatus: row.matchStatus as BillingShipmentMatchStatus,
+      packageMatches: row.packageMatches as BillingPackageMatch[],
+    };
+  });
+
+  const unitsPickedTotal = shipments.reduce(
+    (sum, shipment) => sum + shipment.unitsPicked,
+    0,
+  );
+
   return {
     report: {
       ...reportRow,
       status: reportRow.status as BillingReportStatus,
+      unitsPickedTotal,
       packagingCostTotal: moneyToNumber(reportRow.packagingCostTotal),
+      orderChannelSummary,
     },
-    shipments: shipmentRows.map((row) => ({
-      ...row,
-      packagingCostTotal: moneyToNumber(row.packagingCostTotal),
-      matchStatus: row.matchStatus as BillingShipmentMatchStatus,
-      packageMatches: row.packageMatches as BillingPackageMatch[],
-    })),
+    shipments,
   };
 };
 
@@ -526,6 +633,22 @@ export const exportMonthlyBillingReportCsv = async ({
   reportId: string;
 }) => {
   const report = await getMonthlyBillingReport({ reportId });
+  const summaryLines = report.report.orderChannelSummary
+    ? [
+        [
+          "B2B shipment count",
+          report.report.orderChannelSummary.b2bShipmentCount,
+        ],
+        [
+          "D2C shipment count",
+          report.report.orderChannelSummary.d2cShipmentCount,
+        ],
+        [
+          "Total shipment count",
+          report.report.orderChannelSummary.totalShipmentCount,
+        ],
+      ]
+    : [];
 
   const lines = [
     ["Client", report.report.account.displayName],
@@ -535,9 +658,11 @@ export const exportMonthlyBillingReportCsv = async ({
     ["Generated at", formatDate(report.report.generatedAt)],
     ["Finalized at", formatDate(report.report.finalizedAt)],
     ["Shipment count", report.report.shipmentCount],
+    ["Units picked total", report.report.unitsPickedTotal],
     ["Package count", report.report.packageCount],
     ["Packaging cost total", report.report.packagingCostTotal.toFixed(2)],
     ["Unmatched shipment count", report.report.unmatchedShipmentCount],
+    ...summaryLines,
     [],
     [
       "Shipment external ID",
@@ -546,6 +671,7 @@ export const exportMonthlyBillingReportCsv = async ({
       "Billable date",
       "Shipment status",
       "Match status",
+      "Units picked",
       "Package count",
       "Packaging cost",
       "Package details",
@@ -557,6 +683,7 @@ export const exportMonthlyBillingReportCsv = async ({
       shipment.shipDate ? shipment.shipDate.toISOString() : "",
       shipment.status,
       shipment.matchStatus,
+      shipment.unitsPicked,
       shipment.packageCount,
       shipment.packagingCostTotal.toFixed(2),
       shipment.packageMatches
