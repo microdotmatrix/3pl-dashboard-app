@@ -95,6 +95,7 @@ export type ParsedDashboardSearchParams = {
   sortDir: ShipmentSortDir;
   page: number;
   focus: string | undefined;
+  query: string;
 };
 
 const splitSort = (
@@ -189,6 +190,7 @@ export const parseDashboardSearchParams = (
     sortDir,
     page: parsePage(parseSingleParam(raw.page)),
     focus: parseSingleParam(raw.focus),
+    query: (parseSingleParam(raw.q) ?? "").trim(),
   };
 };
 

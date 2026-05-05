@@ -39,6 +39,7 @@ const weightSchema = z
 
 export const shipstationShipmentSchema = z.object({
   shipment_id: z.string(),
+  shipment_number: z.string().nullable().optional(),
   external_shipment_id: z.string().nullable().optional(),
   shipment_status: z.string(),
   carrier_id: z.string().nullable().optional(),

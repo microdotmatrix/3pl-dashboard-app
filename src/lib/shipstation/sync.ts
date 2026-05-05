@@ -55,6 +55,7 @@ const mapShipmentRow = (
   return {
     accountId: account.id,
     externalId: payload.shipment_id,
+    shipmentNumber: payload.shipment_number ?? null,
     externalShipmentId: payload.external_shipment_id ?? null,
     status: payload.shipment_status,
     carrierId: payload.carrier_id ?? null,
@@ -174,6 +175,7 @@ export const syncAccountShipments = async (
               shipstationShipment.externalId,
             ],
             set: {
+              shipmentNumber: row.shipmentNumber,
               externalShipmentId: row.externalShipmentId,
               status: row.status,
               carrierId: row.carrierId,

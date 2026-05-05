@@ -33,6 +33,7 @@ export const ShipmentsPanel = async ({ searchParams }: ShipmentsPanelProps) => {
       excludeCancelled: parsed.excludeCancelled,
       from: parsed.from,
       to: parsed.to,
+      search: parsed.query,
       sortBy: parsed.sortBy,
       sortDir: parsed.sortDir,
       page: parsed.page,
@@ -49,6 +50,7 @@ export const ShipmentsPanel = async ({ searchParams }: ShipmentsPanelProps) => {
         to={parsed.to}
         rangeMode={parsed.rangeMode}
         sort={parsed.sort}
+        query={parsed.query}
       />
       <ShipmentPriorityCard rows={priority} />
       <ShipmentsTable rows={page.rows} focusExternalId={parsed.focus ?? null} />

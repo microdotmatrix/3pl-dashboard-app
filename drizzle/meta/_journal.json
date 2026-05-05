@@ -43,6 +43,20 @@
       "when": 1777939652357,
       "tag": "0005_milky_hobgoblin",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1778010396675,
+      "tag": "0006_sad_impossible_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1778011287600,
+      "tag": "0007_sparkling_hardball",
+      "breakpoints": true
     }
   ]
 }

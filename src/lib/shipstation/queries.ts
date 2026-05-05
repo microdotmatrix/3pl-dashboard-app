@@ -129,6 +129,7 @@ export type ListShipmentsFilteredParams = {
   excludeCancelled?: boolean;
   from?: Date | null;
   to?: Date | null;
+  search?: string;
   sortBy?: ShipmentSortBy;
   sortDir?: ShipmentSortDir;
   page?: number;
@@ -155,6 +156,7 @@ const buildShipmentFilters = async (params: {
   excludeCancelled?: boolean;
   from?: Date | null;
   to?: Date | null;
+  search?: string;
 }): Promise<SQL | undefined> => {
   const filters: SQL[] = [];
 
@@ -172,6 +174,20 @@ const buildShipmentFilters = async (params: {
 
   if (params.to) {
     filters.push(lte(shipstationShipment.modifiedAtRemote, params.to));
+  }
+
+  const searchTrimmed = params.search?.trim();
+  if (searchTrimmed) {
+    const pattern = `%${searchTrimmed}%`;
+    const searchPredicate = or(
+      ilike(shipstationShipment.externalId, pattern),
+      ilike(shipstationShipment.shipmentNumber, pattern),
+      ilike(shipstationShipment.externalShipmentId, pattern),
+      sql`${shipstationShipment.shipTo}->>'name' ilike ${pattern}`,
+      sql`${shipstationShipment.shipTo}->>'company' ilike ${pattern}`,
+      sql`${shipstationShipment.shipTo}->>'city_locality' ilike ${pattern}`,
+    );
+    if (searchPredicate) filters.push(searchPredicate);
   }
 
   if (params.vendorSlug) {
@@ -203,6 +219,7 @@ export const listShipmentsFiltered = async (
     excludeCancelled: params.excludeCancelled,
     from: params.from ?? null,
     to: params.to ?? null,
+    search: params.search,
   });
 
   const sortColumn = resolveSortColumn(sortBy);

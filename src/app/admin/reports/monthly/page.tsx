@@ -332,6 +332,8 @@ const MonthlyReportsPage = async ({
                   <TableRow>
                     <TableHead>Shipment</TableHead>
                     <TableHead>Billable date</TableHead>
+                    <TableHead>Shipment #</TableHead>
+                    <TableHead>Order ID</TableHead>
                     <TableHead>Match</TableHead>
                     <TableHead>Packages</TableHead>
                     <TableHead>Packaging total</TableHead>
@@ -349,6 +351,12 @@ const MonthlyReportsPage = async ({
                           {shipment.externalId}
                         </TableCell>
                         <TableCell>{formatDate(shipment.shipDate)}</TableCell>
+                        <TableCell className="font-mono text-[0.7rem] text-muted-foreground">
+                          {shipment.shipmentNumber ?? "—"}
+                        </TableCell>
+                        <TableCell className="font-mono text-[0.7rem] text-muted-foreground">
+                          {shipment.externalShipmentId ?? "—"}
+                        </TableCell>
                         <TableCell>
                           <span
                             className={matchStatusClass(shipment.matchStatus)}
@@ -380,7 +388,7 @@ const MonthlyReportsPage = async ({
                   {currentReport.shipments.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={6}
+                        colSpan={8}
                         className="whitespace-normal text-muted-foreground"
                       >
                         No billable shipments landed in this month for{" "}

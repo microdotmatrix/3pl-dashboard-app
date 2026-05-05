@@ -28,6 +28,7 @@ export const shipstationShipment = pgTable(
       .notNull()
       .references(() => shipstationAccount.id, { onDelete: "cascade" }),
     externalId: text("external_id").notNull(),
+    shipmentNumber: text("shipment_number"),
     externalShipmentId: text("external_shipment_id"),
     status: text("status").notNull(),
     carrierId: text("carrier_id"),

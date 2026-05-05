@@ -36,6 +36,8 @@ import {
 } from "@/lib/shipments/vendor-colors";
 import { cn } from "@/lib/utils";
 
+import { ShipmentsSearchInput } from "./shipments-search-input";
+
 type ShipmentsFilterBarProps = {
   vendor: VendorSlug | undefined;
   status: StatusFilterValue;
@@ -43,6 +45,7 @@ type ShipmentsFilterBarProps = {
   to: Date | null;
   rangeMode: RangeMode;
   sort: SortOptionValue;
+  query: string;
 };
 
 type PresetKey = "today" | "7d" | "30d" | "all";
@@ -84,6 +87,7 @@ export const ShipmentsFilterBar = ({
   to,
   rangeMode,
   sort,
+  query,
 }: ShipmentsFilterBarProps) => {
   const router = useRouter();
   const pathname = usePathname();
@@ -190,7 +194,8 @@ export const ShipmentsFilterBar = ({
     vendorValue !== "all" ||
     status !== "active" ||
     sort !== "modified-desc" ||
-    rangeMode !== "all";
+    rangeMode !== "all" ||
+    query.length > 0;
 
   const rangeButtonLabel =
     rangeMode === "default"
@@ -206,112 +211,116 @@ export const ShipmentsFilterBar = ({
         isPending && "opacity-80",
       )}
     >
-      <Select value={vendorValue} onValueChange={onVendorChange}>
-        <SelectTrigger
-          size="default"
-          aria-label="Filter by vendor"
-          className="min-w-28"
-        >
-          <SelectValue placeholder="Vendor" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All vendors</SelectItem>
-          {VENDOR_SLUGS.map((slug) => (
-            <SelectItem key={slug} value={slug}>
-              {VENDOR_ACCENT[slug].label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <ShipmentsSearchInput query={query} />
 
-      <Select value={status} onValueChange={onStatusChange}>
-        <SelectTrigger
-          size="default"
-          aria-label="Filter by status"
-          className="min-w-40"
-        >
-          <SelectValue placeholder="Status" />
-        </SelectTrigger>
-        <SelectContent>
-          {STATUS_OPTIONS.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Popover open={rangePopoverOpen} onOpenChange={setRangePopoverOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={vendorValue} onValueChange={onVendorChange}>
+          <SelectTrigger
             size="default"
-            aria-label="Filter by date range"
+            aria-label="Filter by vendor"
+            className="min-w-28"
           >
-            <HugeiconsIcon
-              icon={Calendar03Icon}
-              strokeWidth={2}
-              data-icon="inline-start"
+            <SelectValue placeholder="Vendor" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All vendors</SelectItem>
+            {VENDOR_SLUGS.map((slug) => (
+              <SelectItem key={slug} value={slug}>
+                {VENDOR_ACCENT[slug].label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={status} onValueChange={onStatusChange}>
+          <SelectTrigger
+            size="default"
+            aria-label="Filter by status"
+            className="min-w-40"
+          >
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            {STATUS_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Popover open={rangePopoverOpen} onOpenChange={setRangePopoverOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="default"
+              aria-label="Filter by date range"
+            >
+              <HugeiconsIcon
+                icon={Calendar03Icon}
+                strokeWidth={2}
+                data-icon="inline-start"
+              />
+              {rangeButtonLabel}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-2" align="start">
+            <div className="mb-2 flex flex-wrap gap-1">
+              {PRESETS.map((preset) => (
+                <Button
+                  key={preset.key}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => applyPreset(preset.key)}
+                >
+                  {preset.label}
+                </Button>
+              ))}
+            </div>
+            <Calendar
+              mode="range"
+              numberOfMonths={2}
+              defaultMonth={from ?? undefined}
+              selected={pendingRange}
+              onSelect={setPendingRange}
             />
-            {rangeButtonLabel}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-2" align="start">
-          <div className="mb-2 flex flex-wrap gap-1">
-            {PRESETS.map((preset) => (
+            <div className="mt-2 flex items-center justify-end gap-2">
               <Button
-                key={preset.key}
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => applyPreset(preset.key)}
+                onClick={() => {
+                  setPendingRange(undefined);
+                  applyDateRange(undefined);
+                  setRangePopoverOpen(false);
+                }}
               >
-                {preset.label}
+                Clear
               </Button>
-            ))}
-          </div>
-          <Calendar
-            mode="range"
-            numberOfMonths={2}
-            defaultMonth={from ?? undefined}
-            selected={pendingRange}
-            onSelect={setPendingRange}
-          />
-          <div className="mt-2 flex items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setPendingRange(undefined);
-                applyDateRange(undefined);
-                setRangePopoverOpen(false);
-              }}
-            >
-              Clear
-            </Button>
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              onClick={() => {
-                applyDateRange(pendingRange);
-                setRangePopoverOpen(false);
-              }}
-            >
-              Apply
-            </Button>
-          </div>
-        </PopoverContent>
-      </Popover>
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                onClick={() => {
+                  applyDateRange(pendingRange);
+                  setRangePopoverOpen(false);
+                }}
+              >
+                Apply
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
 
       <div className="ml-auto flex items-center gap-2">
         <Select value={sort} onValueChange={onSortChange}>
           <SelectTrigger
             size="default"
             aria-label="Sort shipments"
-            className="min-w-56"
+            className="min-w-52"
           >
             <SelectValue placeholder="Sort" />
           </SelectTrigger>

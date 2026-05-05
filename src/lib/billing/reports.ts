@@ -167,6 +167,8 @@ export type MonthlyBillingReportDetailRow = {
   id: string;
   shipmentId: string | null;
   externalId: string;
+  shipmentNumber: string | null;
+  externalShipmentId: string | null;
   shipDate: Date | null;
   status: string;
   packageCount: number;
@@ -229,6 +231,8 @@ export const generateMonthlyBillingReport = async ({
     .select({
       id: shipstationShipment.id,
       externalId: shipstationShipment.externalId,
+      shipmentNumber: shipstationShipment.shipmentNumber,
+      externalShipmentId: shipstationShipment.externalShipmentId,
       shipDate: shipstationShipment.shipDate,
       createdAtRemote: shipstationShipment.createdAtRemote,
       status: shipstationShipment.status,
@@ -319,6 +323,8 @@ export const generateMonthlyBillingReport = async ({
       reportId,
       shipmentId: shipment.id,
       externalId: shipment.externalId,
+      shipmentNumber: shipment.shipmentNumber ?? null,
+      externalShipmentId: shipment.externalShipmentId ?? null,
       shipDate: billableDate,
       status: shipment.status,
       packageCount: evaluation.packageCount,
@@ -402,9 +408,10 @@ export const listMonthlyBillingReports = async ({
       eq(monthlyBillingReport.accountId, shipstationAccount.id),
     );
 
-  const rows = await (accountSlug
-    ? baseQuery.where(eq(shipstationAccount.slug, accountSlug))
-    : baseQuery
+  const rows = await (
+    accountSlug
+      ? baseQuery.where(eq(shipstationAccount.slug, accountSlug))
+      : baseQuery
   ).orderBy(
     desc(monthlyBillingReport.periodStart),
     asc(shipstationAccount.slug),
@@ -458,6 +465,8 @@ export const getMonthlyBillingReport = async ({
       id: monthlyBillingReportShipment.id,
       shipmentId: monthlyBillingReportShipment.shipmentId,
       externalId: monthlyBillingReportShipment.externalId,
+      shipmentNumber: monthlyBillingReportShipment.shipmentNumber,
+      externalShipmentId: monthlyBillingReportShipment.externalShipmentId,
       shipDate: monthlyBillingReportShipment.shipDate,
       status: monthlyBillingReportShipment.status,
       packageCount: monthlyBillingReportShipment.packageCount,
@@ -532,6 +541,8 @@ export const exportMonthlyBillingReportCsv = async ({
     [],
     [
       "Shipment external ID",
+      "Shipment number",
+      "Order ID",
       "Billable date",
       "Shipment status",
       "Match status",
@@ -541,6 +552,8 @@ export const exportMonthlyBillingReportCsv = async ({
     ],
     ...report.shipments.map((shipment) => [
       shipment.externalId,
+      shipment.shipmentNumber ?? "",
+      shipment.externalShipmentId ?? "",
       shipment.shipDate ? shipment.shipDate.toISOString() : "",
       shipment.status,
       shipment.matchStatus,

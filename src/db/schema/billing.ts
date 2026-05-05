@@ -70,6 +70,8 @@ export const monthlyBillingReportShipment = pgTable(
       onDelete: "set null",
     }),
     externalId: text("external_id").notNull(),
+    shipmentNumber: text("shipment_number"),
+    externalShipmentId: text("external_shipment_id"),
     shipDate: timestamp("ship_date", { withTimezone: true }),
     status: text("status").notNull(),
     packageCount: integer("package_count").notNull().default(0),
