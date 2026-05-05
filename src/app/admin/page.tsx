@@ -148,8 +148,8 @@ const AdminDashboardPage = async () => {
   const inviteBase = env.BETTER_AUTH_URL.replace(/\/$/, "");
 
   return (
-    <div className="flex flex-col gap-6">
-      <Card>
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-6">
+      <Card className="lg:col-span-1 xl:col-span-2">
         <CardHeader>
           <CardTitle>Monthly billing reports</CardTitle>
           <CardDescription>
@@ -164,7 +164,63 @@ const AdminDashboardPage = async () => {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="lg:col-span-1 xl:col-span-4">
+        <CardHeader>
+          <CardTitle>Pending approvals</CardTitle>
+          <CardDescription>
+            {pendingUsers.length} waiting for review.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {pendingUsers.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Nothing to review right now.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>User</TableHead>
+                  <TableHead>Registered</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pendingUsers.map((u) => (
+                  <TableRow key={u.id}>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{u.name}</span>
+                        <span className="text-muted-foreground">{u.email}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>{formatDate(u.createdAt)}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <UserActionButton
+                          userId={u.id}
+                          kind="approve"
+                          label="Approve"
+                          variant="default"
+                        />
+                        <UserActionButton
+                          userId={u.id}
+                          kind="reject"
+                          label="Reject"
+                          variant="destructive"
+                          confirm="Reject this user? They will not be able to sign in."
+                        />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="lg:col-span-2 xl:col-span-6">
         <CardHeader>
           <CardTitle>ShipStation sync</CardTitle>
           <CardDescription>
@@ -229,63 +285,7 @@ const AdminDashboardPage = async () => {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Pending approvals</CardTitle>
-          <CardDescription>
-            {pendingUsers.length} waiting for review.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {pendingUsers.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              Nothing to review right now.
-            </p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Registered</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pendingUsers.map((u) => (
-                  <TableRow key={u.id}>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{u.name}</span>
-                        <span className="text-muted-foreground">{u.email}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>{formatDate(u.createdAt)}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <UserActionButton
-                          userId={u.id}
-                          kind="approve"
-                          label="Approve"
-                          variant="default"
-                        />
-                        <UserActionButton
-                          userId={u.id}
-                          kind="reject"
-                          label="Reject"
-                          variant="destructive"
-                          confirm="Reject this user? They will not be able to sign in."
-                        />
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
+      <Card className="lg:col-span-2 xl:col-span-6">
         <CardHeader>
           <CardTitle>All users</CardTitle>
           <CardDescription>
@@ -414,7 +414,7 @@ const AdminDashboardPage = async () => {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="lg:col-span-2 xl:col-span-6">
         <CardHeader>
           <CardTitle>Invite links</CardTitle>
           <CardDescription>

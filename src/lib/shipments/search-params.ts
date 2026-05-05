@@ -11,6 +11,7 @@ export type DashboardSearchParams = Record<
 >;
 
 export const STATUS_OPTIONS = [
+  { value: "active", label: "Active (excl. cancelled)" },
   { value: "all", label: "All statuses" },
   { value: "awaiting", label: "Awaiting fulfillment" },
   { value: "pending", label: "Pending" },
@@ -52,11 +53,11 @@ const parseSingleParam = (
 };
 
 const parseStatus = (value: string | undefined): StatusFilterValue => {
-  if (!value) return "all";
+  if (!value) return "active";
   if (STATUS_OPTIONS.some((option) => option.value === value)) {
     return value as StatusFilterValue;
   }
-  return "all";
+  return "active";
 };
 
 const parseSort = (value: string | undefined): SortOptionValue => {
@@ -85,6 +86,7 @@ export type ParsedDashboardSearchParams = {
   vendor: VendorSlug | undefined;
   status: StatusFilterValue;
   statusesToQuery: string[] | undefined;
+  excludeCancelled: boolean;
   from: Date | null;
   to: Date | null;
   rangeMode: RangeMode;
@@ -109,12 +111,15 @@ export const parseDashboardSearchParams = (
   const vendor = isVendorSlug(vendorRaw) ? vendorRaw : undefined;
 
   const status = parseStatus(parseSingleParam(raw.status));
+  const excludeCancelled = status === "active";
   const statusesToQuery =
     status === "all"
       ? undefined
-      : status === "awaiting"
-        ? [...AWAITING_STATUSES]
-        : [status];
+      : status === "active"
+        ? undefined // Exclude cancelled by default; query will filter it out
+        : status === "awaiting"
+          ? [...AWAITING_STATUSES]
+          : [status];
 
   const fromRaw = parseDate(parseSingleParam(raw.from));
   const toRaw = parseDate(parseSingleParam(raw.to));
@@ -175,6 +180,7 @@ export const parseDashboardSearchParams = (
     vendor,
     status,
     statusesToQuery,
+    excludeCancelled,
     from,
     to,
     rangeMode,

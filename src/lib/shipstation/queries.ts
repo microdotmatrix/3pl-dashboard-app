@@ -126,6 +126,7 @@ export type ShipmentWithAccount = {
 export type ListShipmentsFilteredParams = {
   vendorSlug?: VendorSlug;
   statuses?: string[];
+  excludeCancelled?: boolean;
   from?: Date | null;
   to?: Date | null;
   sortBy?: ShipmentSortBy;
@@ -151,6 +152,7 @@ const resolveSortColumn = (sortBy: ShipmentSortBy) => {
 const buildShipmentFilters = async (params: {
   vendorSlug?: VendorSlug;
   statuses?: string[];
+  excludeCancelled?: boolean;
   from?: Date | null;
   to?: Date | null;
 }): Promise<SQL | undefined> => {
@@ -158,6 +160,10 @@ const buildShipmentFilters = async (params: {
 
   if (params.statuses?.length) {
     filters.push(inArray(shipstationShipment.status, params.statuses));
+  }
+
+  if (params.excludeCancelled) {
+    filters.push(sql`${shipstationShipment.status} != 'cancelled'`);
   }
 
   if (params.from) {
@@ -194,6 +200,7 @@ export const listShipmentsFiltered = async (
   const whereSql = await buildShipmentFilters({
     vendorSlug: params.vendorSlug,
     statuses: params.statuses,
+    excludeCancelled: params.excludeCancelled,
     from: params.from ?? null,
     to: params.to ?? null,
   });

@@ -23,7 +23,7 @@ type UseWhiteboardPollReturn = {
 export const useWhiteboardPoll = ({
   initialNotes,
   initialUnreadCount,
-  intervalMs = 15_000,
+  intervalMs = 90_000,
   enabled = true,
 }: UseWhiteboardPollOptions): UseWhiteboardPollReturn => {
   const [notes, setNotesState] = useState<NoteDto[]>(initialNotes);

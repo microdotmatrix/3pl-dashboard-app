@@ -188,7 +188,7 @@ export const ShipmentsFilterBar = ({
   const vendorValue = vendor ?? "all";
   const hasActiveFilters =
     vendorValue !== "all" ||
-    status !== "all" ||
+    status !== "active" ||
     sort !== "modified-desc" ||
     rangeMode !== "all";
 

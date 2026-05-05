@@ -30,6 +30,7 @@ export const ShipmentsPanel = async ({ searchParams }: ShipmentsPanelProps) => {
     listShipmentsFiltered({
       vendorSlug: parsed.vendor,
       statuses: parsed.statusesToQuery,
+      excludeCancelled: parsed.excludeCancelled,
       from: parsed.from,
       to: parsed.to,
       sortBy: parsed.sortBy,
