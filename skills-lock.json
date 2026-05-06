@@ -26,6 +26,18 @@
       "sourceType": "github",
       "computedHash": "747d7f73bd9e2ec5317b8ef88dc70f97df716d00e3d02de4051feebaa48b062d"
     },
+    "integrate-anything": {
+      "source": "membranehq/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/integrate-anything/SKILL.md",
+      "computedHash": "8390bf3149e40586e5e4772a1ec7032a69660b756e136d2061c92ee9365940bd"
+    },
+    "monday": {
+      "source": "vm0-ai/vm0-skills",
+      "sourceType": "github",
+      "skillPath": "monday/SKILL.md",
+      "computedHash": "5339955e9cf6f30e9007a3a4138e7f5411c25a3f206b17fc607750d2aff4666a"
+    },
     "neon-drizzle": {
       "source": "neondatabase/ai-rules",
       "sourceType": "github",
@@ -55,6 +67,12 @@
       "source": "better-auth/skills",
       "sourceType": "github",
       "computedHash": "7e297aaf887e11fdc03e52bdbf44974e161e8f7c393170ced7dc66cace4f6d46"
+    },
+    "zoho-books": {
+      "source": "membranedev/application-skills",
+      "sourceType": "github",
+      "skillPath": "skills/zoho-books/SKILL.md",
+      "computedHash": "ce7a1725efa603bd2920bf00b1399c67810b263b8bb7d849641226abdb974ec5"
     }
   }
 }
