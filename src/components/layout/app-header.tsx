@@ -1,5 +1,6 @@
 import { Settings01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import Image from "next/image";
 import Link from "next/link";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
@@ -35,15 +36,22 @@ export const AppHeader = ({ user }: AppHeaderProps) => {
           href="/"
           className="flex min-w-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
-            <span className="font-heading text-sm font-semibold">3PL</span>
+          <div className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/40 bg-white">
+            <Image
+              src="/images/greenbox-logo-2.webp"
+              alt="GreenBox 3PL"
+              width={32}
+              height={32}
+              className="size-full object-contain"
+              priority
+            />
           </div>
           <div className="min-w-0">
             <p className="truncate text-[0.625rem] uppercase tracking-[0.25em] text-muted-foreground">
-              Honeybee Shipments
+              Operations Dashboard
             </p>
             <h1 className="truncate font-heading text-base font-semibold text-foreground">
-              Operations dashboard
+              GreenBox 3PL
             </h1>
           </div>
         </Link>

@@ -34,6 +34,15 @@ export type BillingRateRow = {
 
 export type BillingPackagePricingSource = "exact" | "fallback" | "none";
 
+export type BillingManualMetrics = {
+  smallBinCount: number;
+  mediumBinCount: number;
+  largeBinCount: number;
+  cartonsReceivedTotal: number;
+  retailReturnsTotal: number;
+  specialProjectHours: number;
+};
+
 export type BillingPackageMatch = {
   packageIndex: number;
   matched: boolean;

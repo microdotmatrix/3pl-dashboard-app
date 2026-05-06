@@ -22,8 +22,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "3PL Dashboard",
-  description: "Operations dashboard for third-party logistics workflows.",
+  title: "GreenBox 3PL",
+  description: "Operations dashboard for GreenBox 3PL — cannabis accessory fulfillment.",
 };
 
 export default function RootLayout({

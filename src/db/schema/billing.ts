@@ -44,6 +44,19 @@ export const monthlyBillingReport = pgTable(
     unmatchedShipmentCount: integer("unmatched_shipment_count")
       .notNull()
       .default(0),
+    smallBinCount: integer("small_bin_count").notNull().default(0),
+    mediumBinCount: integer("medium_bin_count").notNull().default(0),
+    largeBinCount: integer("large_bin_count").notNull().default(0),
+    cartonsReceivedTotal: integer("cartons_received_total")
+      .notNull()
+      .default(0),
+    retailReturnsTotal: integer("retail_returns_total").notNull().default(0),
+    specialProjectHours: numeric("special_project_hours", {
+      precision: 12,
+      scale: 2,
+    })
+      .notNull()
+      .default("0"),
     generatedAt: timestamp("generated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

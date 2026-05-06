@@ -1,6 +1,7 @@
 import { desc } from "drizzle-orm";
 
 import { MonthlyReportActions } from "@/components/admin/monthly-report-actions";
+import { MonthlyReportMetricsForm } from "@/components/admin/monthly-report-metrics-form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -367,6 +368,12 @@ const MonthlyReportsPage = async ({
               </CardContent>
             </Card>
           </div>
+
+          <MonthlyReportMetricsForm
+            reportId={currentReport.report.id}
+            reportStatus={currentReport.report.status}
+            manualMetrics={currentReport.report.manualMetrics}
+          />
 
           <Card>
             <CardHeader>

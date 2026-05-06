@@ -16,6 +16,7 @@ import { getRequiredBillingShipmentTagNames } from "./config";
 import { matchShipmentPackages } from "./dimension-match";
 import { loadBillingRateSheet } from "./rate-sheet";
 import type {
+  BillingManualMetrics,
   BillingPackageMatch,
   BillingReportStatus,
   BillingShipmentMatchStatus,
@@ -244,6 +245,7 @@ export type MonthlyBillingReportDetail = {
     packageCount: number;
     packagingCostTotal: number;
     unmatchedShipmentCount: number;
+    manualMetrics: BillingManualMetrics;
     orderChannelSummary: {
       b2bShipmentCount: number;
       d2cShipmentCount: number;
@@ -254,6 +256,27 @@ export type MonthlyBillingReportDetail = {
   };
   shipments: MonthlyBillingReportDetailRow[];
 };
+
+const getManualMetricsFromRow = (row: {
+  smallBinCount: number | null;
+  mediumBinCount: number | null;
+  largeBinCount: number | null;
+  cartonsReceivedTotal: number | null;
+  retailReturnsTotal: number | null;
+  specialProjectHours: string | number | null;
+}): BillingManualMetrics => ({
+  smallBinCount: row.smallBinCount ?? 0,
+  mediumBinCount: row.mediumBinCount ?? 0,
+  largeBinCount: row.largeBinCount ?? 0,
+  cartonsReceivedTotal: row.cartonsReceivedTotal ?? 0,
+  retailReturnsTotal: row.retailReturnsTotal ?? 0,
+  specialProjectHours:
+    row.specialProjectHours === null
+      ? 0
+      : typeof row.specialProjectHours === "number"
+        ? row.specialProjectHours
+        : moneyToNumber(row.specialProjectHours),
+});
 
 const hasRyotB2bShipmentPrefix = (shipmentNumber: string | null) =>
   shipmentNumber?.trim().toUpperCase().startsWith(RYOT_B2B_PREFIX) ?? false;
@@ -462,6 +485,45 @@ export const finalizeMonthlyBillingReport = async ({
   return getMonthlyBillingReport({ reportId });
 };
 
+export const updateMonthlyBillingReportManualMetrics = async ({
+  reportId,
+  manualMetrics,
+}: {
+  reportId: string;
+  manualMetrics: BillingManualMetrics;
+}) => {
+  const [reportRow] = await db
+    .select({
+      id: monthlyBillingReport.id,
+      status: monthlyBillingReport.status,
+    })
+    .from(monthlyBillingReport)
+    .where(eq(monthlyBillingReport.id, reportId))
+    .limit(1);
+
+  if (!reportRow) {
+    throw new Error("Monthly billing report not found.");
+  }
+
+  if (reportRow.status === "finalized") {
+    throw new Error("Finalized reports cannot be edited.");
+  }
+
+  await db
+    .update(monthlyBillingReport)
+    .set({
+      smallBinCount: manualMetrics.smallBinCount,
+      mediumBinCount: manualMetrics.mediumBinCount,
+      largeBinCount: manualMetrics.largeBinCount,
+      cartonsReceivedTotal: manualMetrics.cartonsReceivedTotal,
+      retailReturnsTotal: manualMetrics.retailReturnsTotal,
+      specialProjectHours: moneyToStorage(manualMetrics.specialProjectHours),
+    })
+    .where(eq(monthlyBillingReport.id, reportId));
+
+  return getMonthlyBillingReport({ reportId });
+};
+
 export const listMonthlyBillingReports = async ({
   accountSlug,
 }: {
@@ -522,6 +584,12 @@ export const getMonthlyBillingReport = async ({
       packageCount: monthlyBillingReport.packageCount,
       packagingCostTotal: monthlyBillingReport.packagingCostTotal,
       unmatchedShipmentCount: monthlyBillingReport.unmatchedShipmentCount,
+      smallBinCount: monthlyBillingReport.smallBinCount,
+      mediumBinCount: monthlyBillingReport.mediumBinCount,
+      largeBinCount: monthlyBillingReport.largeBinCount,
+      cartonsReceivedTotal: monthlyBillingReport.cartonsReceivedTotal,
+      retailReturnsTotal: monthlyBillingReport.retailReturnsTotal,
+      specialProjectHours: monthlyBillingReport.specialProjectHours,
       generatedAt: monthlyBillingReport.generatedAt,
       finalizedAt: monthlyBillingReport.finalizedAt,
       account: {
@@ -590,6 +658,7 @@ export const getMonthlyBillingReport = async ({
     (sum, shipment) => sum + shipment.unitsPicked,
     0,
   );
+  const manualMetrics = getManualMetricsFromRow(reportRow);
 
   return {
     report: {
@@ -597,6 +666,7 @@ export const getMonthlyBillingReport = async ({
       status: reportRow.status as BillingReportStatus,
       unitsPickedTotal,
       packagingCostTotal: moneyToNumber(reportRow.packagingCostTotal),
+      manualMetrics,
       orderChannelSummary,
     },
     shipments,
@@ -662,6 +732,18 @@ export const exportMonthlyBillingReportCsv = async ({
     ["Package count", report.report.packageCount],
     ["Packaging cost total", report.report.packagingCostTotal.toFixed(2)],
     ["Unmatched shipment count", report.report.unmatchedShipmentCount],
+    ["Small bin count", report.report.manualMetrics.smallBinCount],
+    ["Medium bin count", report.report.manualMetrics.mediumBinCount],
+    ["Large bin count", report.report.manualMetrics.largeBinCount],
+    [
+      "Cartons received total",
+      report.report.manualMetrics.cartonsReceivedTotal,
+    ],
+    ["Retail returns total", report.report.manualMetrics.retailReturnsTotal],
+    [
+      "Special project hours",
+      report.report.manualMetrics.specialProjectHours.toFixed(2),
+    ],
     ...summaryLines,
     [],
     [
