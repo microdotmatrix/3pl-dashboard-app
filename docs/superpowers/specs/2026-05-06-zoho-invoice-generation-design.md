@@ -54,6 +54,7 @@ src/
 **Modified files:**
 - `src/lib/billing/types.ts` — add `additionalCartonsCount` to `BillingManualMetrics`
 - `src/db/schema/billing.ts` — add `additional_carton_count` (int, default 0) and `zoho_invoice_id` (text, nullable) to `monthly_billing_report`
+- `src/lib/billing/reports.ts` — include `additionalCartonsCount` in the `manualMetrics` object assembled by `getMonthlyBillingReportForPeriod` (individual DB columns are assembled into the `BillingManualMetrics` shape in this query layer)
 - `src/components/admin/monthly-report-metrics-form.tsx` — add `additionalCartonsCount` field
 - `src/lib/billing/actions.ts` — add `createZohoInvoiceAction` (file already updated with `additionalCartonsCount` parsing)
 - `src/env.ts` — add Membrane + OpenRouter env vars
@@ -101,13 +102,15 @@ All three use `MEMBRANE_ZOHO_CONNECTION_ID` to scope requests to the correct Zoh
 
 ### `src/lib/zoho/contact-map.ts`
 
-Static config object mapping account slugs (lowercase) to Zoho Books contact IDs. Committed to source, filled in before execution:
+Static config object mapping account slugs (lowercase) to Zoho Books contact IDs. Committed to source.
+
+> **Required before execution:** fill in the three contact IDs from Zoho Books before the implementation plan is run. The action will throw at runtime if any value is an empty string.
 
 ```ts
 export const ZOHO_CONTACT_IDS: Record<string, string> = {
-  dip: "",
-  fatass: "",
-  ryot: "",
+  dip: "",      // fill in Zoho Books contact ID for DIP
+  fatass: "",   // fill in Zoho Books contact ID for Fatass
+  ryot: "",     // fill in Zoho Books contact ID for Ryot
 }
 ```
 
@@ -202,7 +205,7 @@ Pure function `buildInvoiceParams(report, accountSlug)`. No side effects.
 - Trigger: "Assistant" button in `MonthlyReportActions`
 - Renders as a shadcn `Sheet` from the right
 - Props: `reportId`, `accountSlug`, `reportStatus`, `periodLabel`, `zohoInvoiceId`
-- On `createDraftInvoice` tool success response: calls `router.refresh()` to sync parent page
+- On `createDraftInvoice` tool success: a `useEffect` watches the `messages` array for a message with `role === "tool"` and `toolName === "createDraftInvoice"` containing a success payload, then calls `router.refresh()` to sync the parent page state
 - Available on all report statuses; invoice creation tool self-guards on status
 
 ---
