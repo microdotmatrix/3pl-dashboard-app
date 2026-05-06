@@ -261,6 +261,7 @@ const getManualMetricsFromRow = (row: {
   smallBinCount: number | null;
   mediumBinCount: number | null;
   largeBinCount: number | null;
+  additionalCartonsCount: number | null;
   cartonsReceivedTotal: number | null;
   retailReturnsTotal: number | null;
   specialProjectHours: string | number | null;
@@ -268,6 +269,7 @@ const getManualMetricsFromRow = (row: {
   smallBinCount: row.smallBinCount ?? 0,
   mediumBinCount: row.mediumBinCount ?? 0,
   largeBinCount: row.largeBinCount ?? 0,
+  additionalCartonsCount: row.additionalCartonsCount ?? 0,
   cartonsReceivedTotal: row.cartonsReceivedTotal ?? 0,
   retailReturnsTotal: row.retailReturnsTotal ?? 0,
   specialProjectHours:
@@ -515,6 +517,7 @@ export const updateMonthlyBillingReportManualMetrics = async ({
       smallBinCount: manualMetrics.smallBinCount,
       mediumBinCount: manualMetrics.mediumBinCount,
       largeBinCount: manualMetrics.largeBinCount,
+      additionalCartonsCount: manualMetrics.additionalCartonsCount,
       cartonsReceivedTotal: manualMetrics.cartonsReceivedTotal,
       retailReturnsTotal: manualMetrics.retailReturnsTotal,
       specialProjectHours: moneyToStorage(manualMetrics.specialProjectHours),
@@ -587,6 +590,7 @@ export const getMonthlyBillingReport = async ({
       smallBinCount: monthlyBillingReport.smallBinCount,
       mediumBinCount: monthlyBillingReport.mediumBinCount,
       largeBinCount: monthlyBillingReport.largeBinCount,
+      additionalCartonsCount: monthlyBillingReport.additionalCartonsCount,
       cartonsReceivedTotal: monthlyBillingReport.cartonsReceivedTotal,
       retailReturnsTotal: monthlyBillingReport.retailReturnsTotal,
       specialProjectHours: monthlyBillingReport.specialProjectHours,
@@ -735,6 +739,7 @@ export const exportMonthlyBillingReportCsv = async ({
     ["Small bin count", report.report.manualMetrics.smallBinCount],
     ["Medium bin count", report.report.manualMetrics.mediumBinCount],
     ["Large bin count", report.report.manualMetrics.largeBinCount],
+    ["Additional cartons", report.report.manualMetrics.additionalCartonsCount],
     [
       "Cartons received total",
       report.report.manualMetrics.cartonsReceivedTotal,

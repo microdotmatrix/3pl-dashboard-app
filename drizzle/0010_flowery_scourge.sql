@@ -1,0 +1,1 @@
+ALTER TABLE "monthly_billing_report" ADD COLUMN "additional_cartons_count" integer DEFAULT 0 NOT NULL;

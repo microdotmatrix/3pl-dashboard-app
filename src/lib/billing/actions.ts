@@ -106,6 +106,12 @@ const getManualMetricsFromFormData = (
     "Large bin count",
     fieldErrors,
   );
+  const additionalCartonsCount = parseIntegerField(
+    formData,
+    "additionalCartonsCount",
+    "Additional cartons",
+    fieldErrors,
+  );
   const cartonsReceivedTotal = parseIntegerField(
     formData,
     "cartonsReceivedTotal",
@@ -124,6 +130,7 @@ const getManualMetricsFromFormData = (
     smallBinCount === null ||
     mediumBinCount === null ||
     largeBinCount === null ||
+    additionalCartonsCount === null ||
     cartonsReceivedTotal === null ||
     retailReturnsTotal === null ||
     specialProjectHours === null
@@ -136,6 +143,7 @@ const getManualMetricsFromFormData = (
       smallBinCount,
       mediumBinCount,
       largeBinCount,
+      additionalCartonsCount,
       cartonsReceivedTotal,
       retailReturnsTotal,
       specialProjectHours,

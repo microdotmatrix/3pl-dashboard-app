@@ -47,6 +47,9 @@ export const monthlyBillingReport = pgTable(
     smallBinCount: integer("small_bin_count").notNull().default(0),
     mediumBinCount: integer("medium_bin_count").notNull().default(0),
     largeBinCount: integer("large_bin_count").notNull().default(0),
+    additionalCartonsCount: integer("additional_cartons_count")
+      .notNull()
+      .default(0),
     cartonsReceivedTotal: integer("cartons_received_total")
       .notNull()
       .default(0),

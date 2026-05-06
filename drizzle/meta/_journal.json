@@ -71,6 +71,13 @@
       "when": 1778026437427,
       "tag": "0009_cuddly_medusa",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1778104463933,
+      "tag": "0010_flowery_scourge",
+      "breakpoints": true
     }
   ]
 }

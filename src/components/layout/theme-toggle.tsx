@@ -2,11 +2,25 @@
 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
 
-export function ThemeToggle() {
+export const ThemeToggle = () => {
   const { resolvedTheme, setTheme } = useTheme();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (!isMounted) {
+    return <div className="size-8" aria-hidden />;
+  }
 
   const isDark = resolvedTheme === "dark";
 
@@ -29,4 +43,4 @@ export function ThemeToggle() {
       <TooltipContent>{isDark ? "Light mode" : "Dark mode"}</TooltipContent>
     </Tooltip>
   );
-}
+};

@@ -32,6 +32,12 @@
       "skillPath": "skills/integrate-anything/SKILL.md",
       "computedHash": "8390bf3149e40586e5e4772a1ec7032a69660b756e136d2061c92ee9365940bd"
     },
+    "integration-development": {
+      "source": "membranehq/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/integration-development/SKILL.md",
+      "computedHash": "882fe30a80706708c7a765af46992eb705d3bea0e7231173ddd01f8689088b4a"
+    },
     "monday": {
       "source": "vm0-ai/vm0-skills",
       "sourceType": "github",
