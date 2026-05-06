@@ -1,17 +1,17 @@
-import { Settings01Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
-import Image from "next/image";
-import Link from "next/link";
-
+import greenboxLogo from "@/assets/greenbox-logo-2.png";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { AppNav } from "@/components/layout/app-nav";
 import {
   ADMIN_NAV_ITEMS,
   DASHBOARD_NAV_ITEM,
 } from "@/components/layout/nav-items";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import type { SessionProfile } from "@/lib/auth/access";
+import Image from "next/image";
+import Link from "next/link";
+import { Icon } from "../ui/icon";
 
 const initials = (name: string, email: string): string => {
   const source = name?.trim() || email;
@@ -36,12 +36,12 @@ export const AppHeader = ({ user }: AppHeaderProps) => {
           href="/"
           className="flex min-w-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          <div className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/40 bg-white">
+          <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/40 bg-white">
             <Image
-              src="/images/greenbox-logo-2.webp"
+              src={greenboxLogo}
               alt="GreenBox 3PL"
-              width={32}
-              height={32}
+              width={64}
+              height={64}
               className="size-full object-contain"
               priority
             />
@@ -84,11 +84,16 @@ export const AppHeader = ({ user }: AppHeaderProps) => {
               className="gap-1.5 text-muted-foreground hover:text-foreground md:hidden"
             >
               <Link href="/admin">
-                <HugeiconsIcon icon={Settings01Icon} size={14} aria-hidden />
+                <Icon
+                  name="hugeicons:settings-01"
+                  className="size-4"
+                  aria-hidden
+                />
                 Admin
               </Link>
             </Button>
           ) : null}
+          <ThemeToggle />
           <SignOutButton
             variant="ghost"
             className="gap-1.5 text-muted-foreground hover:text-foreground"

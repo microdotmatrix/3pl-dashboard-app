@@ -1,11 +1,11 @@
 "use client";
 
-import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import type { AppNavItem } from "@/components/layout/nav-items";
 import { cn } from "@/lib/utils";
+import { Icon } from "../ui/icon";
 
 const isActive = (pathname: string, item: AppNavItem): boolean => {
   if (item.exact) return pathname === item.href;
@@ -39,7 +39,7 @@ export const AppNav = ({ items }: AppNavProps) => {
                 : "text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
           >
-            <HugeiconsIcon icon={item.icon} size={14} aria-hidden />
+            <Icon name={item.icon} className="size-4" aria-hidden />
             {item.label}
           </Link>
         );
