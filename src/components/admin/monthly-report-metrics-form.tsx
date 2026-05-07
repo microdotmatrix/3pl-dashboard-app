@@ -69,6 +69,7 @@ type MetricField = {
   key: keyof BillingManualMetrics;
   label: string;
   description: string;
+  abbreviation?: string;
   inputMode: React.HTMLAttributes<HTMLInputElement>["inputMode"];
   step: string;
   format: (value: number) => string;
@@ -78,6 +79,7 @@ type MetricSection = {
   title: string;
   description: string;
   gridClassName: string;
+  layout?: "default" | "split";
   fields: MetricField[];
 };
 
@@ -86,6 +88,7 @@ const STORAGE_METRICS: MetricField[] = [
     key: "smallBinCount",
     label: "Small bin count",
     description: "Total small storage bins on hand at month end.",
+    abbreviation: "SM",
     inputMode: "numeric",
     step: "1",
     format: (value) => numberFormatter.format(value),
@@ -94,6 +97,7 @@ const STORAGE_METRICS: MetricField[] = [
     key: "mediumBinCount",
     label: "Medium bin count",
     description: "Total medium storage bins on hand at month end.",
+    abbreviation: "MD",
     inputMode: "numeric",
     step: "1",
     format: (value) => numberFormatter.format(value),
@@ -102,6 +106,7 @@ const STORAGE_METRICS: MetricField[] = [
     key: "largeBinCount",
     label: "Large bin count",
     description: "Total large storage bins on hand at month end.",
+    abbreviation: "LG",
     inputMode: "numeric",
     step: "1",
     format: (value) => numberFormatter.format(value),
@@ -110,6 +115,7 @@ const STORAGE_METRICS: MetricField[] = [
     key: "additionalCartonsCount",
     label: "Additional cartons",
     description: "Additional storage cartons on hand at month end.",
+    abbreviation: "EX",
     inputMode: "numeric",
     step: "1",
     format: (value) => numberFormatter.format(value),
@@ -149,6 +155,7 @@ const METRIC_SECTIONS: MetricSection[] = [
     description:
       "Month-end storage counts for bins and any additional cartons on hand.",
     gridClassName: "grid gap-4 md:grid-cols-2 xl:grid-cols-4",
+    layout: "split",
     fields: STORAGE_METRICS,
   },
   {
@@ -281,6 +288,7 @@ export const MonthlyReportMetricsForm = ({
                   type="submit"
                   form="monthly-report-metrics-form"
                   disabled={isPending}
+                  className="h-9 px-4 text-sm"
                 >
                   {isPending ? "Saving…" : "Save"}
                 </Button>
@@ -289,6 +297,7 @@ export const MonthlyReportMetricsForm = ({
                   variant="outline"
                   disabled={isPending}
                   onClick={handleCancel}
+                  className="h-9 px-4 text-sm"
                 >
                   Cancel
                 </Button>
@@ -298,6 +307,7 @@ export const MonthlyReportMetricsForm = ({
                 type="button"
                 variant="outline"
                 onClick={() => setIsEditing(true)}
+                className="h-9 animate-pulse-primary px-4 text-sm"
               >
                 Edit
               </Button>
@@ -336,77 +346,175 @@ export const MonthlyReportMetricsForm = ({
                   {section.description}
                 </FieldDescription>
                 <div className={section.gridClassName}>
-                  {section.fields.map((metric) => (
-                    <Field
-                      key={metric.key}
-                      className="rounded-md border border-border/60 bg-background/80 p-3"
-                    >
-                      <FieldTitle>{metric.label}</FieldTitle>
-                      <input
-                        type="hidden"
-                        name={metric.key}
-                        value={
-                          isEditing
-                            ? draftValues[metric.key]
-                            : String(currentMetrics[metric.key])
-                        }
-                      />
-                      {isEditing ? (
-                        <div className="mt-2 flex flex-col gap-2">
-                          <InputGroup>
-                            <InputGroupAddon align="inline-start">
-                              <InputGroupButton
-                                type="button"
-                                size="icon-xs"
-                                aria-label={`Decrease ${metric.label}`}
+                  {section.fields.map((metric) => {
+                    const isSplit =
+                      section.layout === "split" && metric.abbreviation;
+
+                    if (isSplit) {
+                      return (
+                        <Field
+                          key={metric.key}
+                          className="!gap-0 overflow-hidden rounded-md border border-border/60 bg-background/80"
+                        >
+                          <FieldTitle className="sr-only">
+                            {metric.label}
+                          </FieldTitle>
+                          <input
+                            type="hidden"
+                            name={metric.key}
+                            value={
+                              isEditing
+                                ? draftValues[metric.key]
+                                : String(currentMetrics[metric.key])
+                            }
+                          />
+                          <div className="grid grid-cols-[5rem_1fr] items-stretch">
+                            <div className="flex items-center justify-center bg-muted/40 font-heading text-3xl font-bold tracking-wider text-muted-foreground">
+                              {metric.abbreviation}
+                            </div>
+                            <div className="flex items-center justify-center px-3 py-4">
+                              {isEditing ? (
+                                <InputGroup>
+                                  <InputGroupAddon align="inline-start">
+                                    <InputGroupButton
+                                      type="button"
+                                      size="icon-xs"
+                                      aria-label={`Decrease ${metric.label}`}
+                                      disabled={isPending}
+                                      onClick={() =>
+                                        adjustDraftValue(metric.key, -1)
+                                      }
+                                    >
+                                      -
+                                    </InputGroupButton>
+                                  </InputGroupAddon>
+                                  <InputGroupInput
+                                    id={metric.key}
+                                    type="number"
+                                    min="0"
+                                    step={metric.step}
+                                    inputMode={metric.inputMode}
+                                    value={draftValues[metric.key]}
+                                    disabled={isPending}
+                                    aria-invalid={
+                                      Boolean(fieldError(state, metric.key)) ||
+                                      undefined
+                                    }
+                                    aria-label={metric.label}
+                                    className="text-center font-heading text-xl font-semibold"
+                                    onChange={(event) =>
+                                      setDraftValue(
+                                        metric.key,
+                                        event.currentTarget.value,
+                                      )
+                                    }
+                                  />
+                                  <InputGroupAddon align="inline-end">
+                                    <InputGroupButton
+                                      type="button"
+                                      size="icon-xs"
+                                      aria-label={`Increase ${metric.label}`}
+                                      disabled={isPending}
+                                      onClick={() =>
+                                        adjustDraftValue(metric.key, 1)
+                                      }
+                                    >
+                                      +
+                                    </InputGroupButton>
+                                  </InputGroupAddon>
+                                </InputGroup>
+                              ) : (
+                                <p className="font-heading text-4xl font-semibold tabular-nums">
+                                  {metric.format(currentMetrics[metric.key])}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <FieldError className="px-3 pb-2">
+                            {fieldError(state, metric.key)}
+                          </FieldError>
+                        </Field>
+                      );
+                    }
+
+                    return (
+                      <Field
+                        key={metric.key}
+                        className="rounded-md border border-border/60 bg-background/80 p-3"
+                      >
+                        <FieldTitle>{metric.label}</FieldTitle>
+                        <input
+                          type="hidden"
+                          name={metric.key}
+                          value={
+                            isEditing
+                              ? draftValues[metric.key]
+                              : String(currentMetrics[metric.key])
+                          }
+                        />
+                        {isEditing ? (
+                          <div className="mt-2 flex flex-col gap-2">
+                            <InputGroup>
+                              <InputGroupAddon align="inline-start">
+                                <InputGroupButton
+                                  type="button"
+                                  size="icon-xs"
+                                  aria-label={`Decrease ${metric.label}`}
+                                  disabled={isPending}
+                                  onClick={() =>
+                                    adjustDraftValue(metric.key, -1)
+                                  }
+                                >
+                                  -
+                                </InputGroupButton>
+                              </InputGroupAddon>
+                              <InputGroupInput
+                                id={metric.key}
+                                type="number"
+                                min="0"
+                                step={metric.step}
+                                inputMode={metric.inputMode}
+                                value={draftValues[metric.key]}
                                 disabled={isPending}
-                                onClick={() => adjustDraftValue(metric.key, -1)}
-                              >
-                                -
-                              </InputGroupButton>
-                            </InputGroupAddon>
-                            <InputGroupInput
-                              id={metric.key}
-                              type="number"
-                              min="0"
-                              step={metric.step}
-                              inputMode={metric.inputMode}
-                              value={draftValues[metric.key]}
-                              disabled={isPending}
-                              aria-invalid={
-                                Boolean(fieldError(state, metric.key)) ||
-                                undefined
-                              }
-                              className="text-center font-heading text-lg font-semibold"
-                              onChange={(event) =>
-                                setDraftValue(
-                                  metric.key,
-                                  event.currentTarget.value,
-                                )
-                              }
-                            />
-                            <InputGroupAddon align="inline-end">
-                              <InputGroupButton
-                                type="button"
-                                size="icon-xs"
-                                aria-label={`Increase ${metric.label}`}
-                                disabled={isPending}
-                                onClick={() => adjustDraftValue(metric.key, 1)}
-                              >
-                                +
-                              </InputGroupButton>
-                            </InputGroupAddon>
-                          </InputGroup>
-                        </div>
-                      ) : (
-                        <p className="mt-2 font-heading text-2xl font-semibold">
-                          {metric.format(currentMetrics[metric.key])}
-                        </p>
-                      )}
-                      <FieldDescription>{metric.description}</FieldDescription>
-                      <FieldError>{fieldError(state, metric.key)}</FieldError>
-                    </Field>
-                  ))}
+                                aria-invalid={
+                                  Boolean(fieldError(state, metric.key)) ||
+                                  undefined
+                                }
+                                className="text-center font-heading text-lg font-semibold"
+                                onChange={(event) =>
+                                  setDraftValue(
+                                    metric.key,
+                                    event.currentTarget.value,
+                                  )
+                                }
+                              />
+                              <InputGroupAddon align="inline-end">
+                                <InputGroupButton
+                                  type="button"
+                                  size="icon-xs"
+                                  aria-label={`Increase ${metric.label}`}
+                                  disabled={isPending}
+                                  onClick={() => adjustDraftValue(metric.key, 1)}
+                                >
+                                  +
+                                </InputGroupButton>
+                              </InputGroupAddon>
+                            </InputGroup>
+                          </div>
+                        ) : (
+                          <p className="mt-2 font-heading text-2xl font-semibold">
+                            {metric.format(currentMetrics[metric.key])}
+                          </p>
+                        )}
+                        <FieldDescription>
+                          {metric.description}
+                        </FieldDescription>
+                        <FieldError>
+                          {fieldError(state, metric.key)}
+                        </FieldError>
+                      </Field>
+                    );
+                  })}
                 </div>
               </FieldSet>
             ))}

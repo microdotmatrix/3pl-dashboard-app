@@ -53,6 +53,17 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --animate-pulse-primary: pulse-primary 2.4s ease-in-out infinite;
+}
+
+@keyframes pulse-primary {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--primary) 0%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 18px 2px color-mix(in oklch, var(--primary) 55%, transparent);
+  }
 }
 
 :root {

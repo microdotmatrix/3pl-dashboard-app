@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { DM_Sans, Geist, Geist_Mono } from "next/font/google";
 
 import { ThemeProvider } from "@/components/theme-provider";
+import { ScrollToTop } from "@/components/ui/scroll-to-top";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 
@@ -52,6 +53,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          <ScrollToTop />
           <Toaster position="top-right" richColors closeButton />
         </ThemeProvider>
       </body>

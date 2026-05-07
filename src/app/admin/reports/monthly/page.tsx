@@ -256,128 +256,116 @@ const MonthlyReportsPage = async ({
 
       {currentReport ? (
         <>
-          <div
-            className={`grid gap-4 md:grid-cols-2 ${
-              currentReport.report.orderChannelSummary
-                ? "xl:grid-cols-4"
-                : "xl:grid-cols-5"
-            }`}
-          >
-            {currentReport.report.orderChannelSummary ? (
-              <>
-                <Card size="sm">
-                  <CardHeader>
-                    <CardTitle>B2B shipments</CardTitle>
-                    <CardDescription>
-                      Shipment # starts with <code>B2B</code>
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="font-heading text-2xl font-semibold">
-                      {
-                        currentReport.report.orderChannelSummary
-                          .b2bShipmentCount
-                      }
-                    </p>
-                  </CardContent>
-                </Card>
-                <Card size="sm">
-                  <CardHeader>
-                    <CardTitle>D2C shipments</CardTitle>
-                    <CardDescription>
-                      Shipment # does not start with <code>B2B</code>
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="font-heading text-2xl font-semibold">
-                      {
-                        currentReport.report.orderChannelSummary
-                          .d2cShipmentCount
-                      }
-                    </p>
-                  </CardContent>
-                </Card>
-                <Card size="sm">
-                  <CardHeader>
-                    <CardTitle>Total shipments</CardTitle>
-                    <CardDescription>
-                      {monthFormatter.format(currentReport.report.periodStart)}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="font-heading text-2xl font-semibold">
-                      {
-                        currentReport.report.orderChannelSummary
-                          .totalShipmentCount
-                      }
-                    </p>
-                  </CardContent>
-                </Card>
-              </>
-            ) : (
+          {(() => {
+            const channelSummary = currentReport.report.orderChannelSummary;
+            const periodLabel = monthFormatter.format(
+              currentReport.report.periodStart,
+            );
+            const stats: Array<{
+              key: string;
+              label: string;
+              note: React.ReactNode;
+              value: React.ReactNode;
+            }> = channelSummary
+              ? [
+                  {
+                    key: "b2b",
+                    label: "B2B shipments",
+                    note: (
+                      <>
+                        Shipment # starts with <code>B2B</code>
+                      </>
+                    ),
+                    value: channelSummary.b2bShipmentCount,
+                  },
+                  {
+                    key: "d2c",
+                    label: "D2C shipments",
+                    note: (
+                      <>
+                        Shipment # does not start with <code>B2B</code>
+                      </>
+                    ),
+                    value: channelSummary.d2cShipmentCount,
+                  },
+                  {
+                    key: "total",
+                    label: "Total shipments",
+                    note: periodLabel,
+                    value: channelSummary.totalShipmentCount,
+                  },
+                ]
+              : [
+                  {
+                    key: "shipments",
+                    label: "Shipment count",
+                    note: periodLabel,
+                    value: currentReport.report.shipmentCount,
+                  },
+                ];
+
+            stats.push(
+              {
+                key: "units",
+                label: "Units picked",
+                note: "Sum of line-item quantities",
+                value: currentReport.report.unitsPickedTotal,
+              },
+              {
+                key: "packages",
+                label: "Package count",
+                note: "All package rows evaluated",
+                value: currentReport.report.packageCount,
+              },
+              {
+                key: "packaging-total",
+                label: "Packaging total",
+                note: "Snapshot for invoice prep",
+                value: currencyFormatter.format(
+                  currentReport.report.packagingCostTotal,
+                ),
+              },
+              {
+                key: "unmatched",
+                label: "Unmatched shipments",
+                note: "Values shown are estimated costs",
+                value: currentReport.report.unmatchedShipmentCount,
+              },
+            );
+
+            return (
               <Card size="sm">
-                <CardHeader>
-                  <CardTitle>Shipment count</CardTitle>
-                  <CardDescription>
-                    {monthFormatter.format(currentReport.report.periodStart)}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="font-heading text-2xl font-semibold">
-                    {currentReport.report.shipmentCount}
-                  </p>
+                <CardContent className="px-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[28%]">Metric</TableHead>
+                        <TableHead>Notes</TableHead>
+                        <TableHead className="w-[18%] text-right">
+                          Value
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {stats.map((stat) => (
+                        <TableRow key={stat.key}>
+                          <TableCell className="font-medium">
+                            {stat.label}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {stat.note}
+                          </TableCell>
+                          <TableCell className="text-right font-heading text-base font-semibold tabular-nums">
+                            {stat.value}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </CardContent>
               </Card>
-            )}
-            <Card size="sm">
-              <CardHeader>
-                <CardTitle>Units picked</CardTitle>
-                <CardDescription>Sum of line-item quantities</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="font-heading text-2xl font-semibold">
-                  {currentReport.report.unitsPickedTotal}
-                </p>
-              </CardContent>
-            </Card>
-            <Card size="sm">
-              <CardHeader>
-                <CardTitle>Package count</CardTitle>
-                <CardDescription>All package rows evaluated</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="font-heading text-2xl font-semibold">
-                  {currentReport.report.packageCount}
-                </p>
-              </CardContent>
-            </Card>
-            <Card size="sm">
-              <CardHeader>
-                <CardTitle>Packaging total</CardTitle>
-                <CardDescription>Snapshot for invoice prep</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="font-heading text-2xl font-semibold">
-                  {currencyFormatter.format(
-                    currentReport.report.packagingCostTotal,
-                  )}
-                </p>
-              </CardContent>
-            </Card>
-            <Card size="sm">
-              <CardHeader>
-                <CardTitle>Unmatched shipments</CardTitle>
-                <CardDescription>
-                  Finalization requires zero exceptions
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="font-heading text-2xl font-semibold">
-                  {currentReport.report.unmatchedShipmentCount}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+            );
+          })()}
 
           <MonthlyReportMetricsForm
             reportId={currentReport.report.id}
