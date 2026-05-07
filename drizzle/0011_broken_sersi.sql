@@ -1,0 +1,1 @@
+ALTER TABLE "monthly_billing_report" ADD COLUMN "zoho_invoice_id" text;

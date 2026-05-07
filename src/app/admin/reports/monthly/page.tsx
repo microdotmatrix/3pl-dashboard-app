@@ -32,6 +32,7 @@ import {
   getMonthlyBillingReportForPeriod,
   listMonthlyBillingReports,
 } from "@/lib/billing/reports";
+import type { BillingAccountSlug } from "@/lib/billing/types";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -172,9 +173,7 @@ const MonthlyReportsPage = async ({
 
   const sheetConfigured = isBillingSheetConfigured(selectedAccount.slug);
   const canFinalize =
-    currentReport !== null &&
-    currentReport.report.status === "draft" &&
-    currentReport.report.unmatchedShipmentCount === 0;
+    currentReport !== null && currentReport.report.status === "draft";
 
   return (
     <div className="flex flex-col gap-6">
@@ -221,12 +220,21 @@ const MonthlyReportsPage = async ({
           </form>
 
           <MonthlyReportActions
-            accountSlug={selectedAccount.slug}
+            accountSlug={selectedAccount.slug as BillingAccountSlug}
             year={selectedMonth.year}
             month={selectedMonth.month}
             reportId={currentReport?.report.id ?? null}
             reportStatus={currentReport?.report.status ?? null}
+            zohoInvoiceId={currentReport?.report.zohoInvoiceId ?? null}
+            periodLabel={
+              currentReport
+                ? monthFormatter.format(currentReport.report.periodStart)
+                : `${selectedMonth.year}-${String(selectedMonth.month).padStart(2, "0")}`
+            }
             canFinalize={canFinalize}
+            unmatchedShipmentCount={
+              currentReport?.report.unmatchedShipmentCount ?? 0
+            }
             sheetConfigured={sheetConfigured}
           />
 

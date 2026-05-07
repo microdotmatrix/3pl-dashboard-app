@@ -78,6 +78,13 @@
       "when": 1778104463933,
       "tag": "0010_flowery_scourge",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1778111085056,
+      "tag": "0011_broken_sersi",
+      "breakpoints": true
     }
   ]
 }

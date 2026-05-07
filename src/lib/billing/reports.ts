@@ -253,6 +253,7 @@ export type MonthlyBillingReportDetail = {
     } | null;
     generatedAt: Date;
     finalizedAt: Date | null;
+    zohoInvoiceId: string | null;
   };
   shipments: MonthlyBillingReportDetailRow[];
 };
@@ -470,12 +471,6 @@ export const finalizeMonthlyBillingReport = async ({
     return report;
   }
 
-  if (report.report.unmatchedShipmentCount > 0) {
-    throw new Error(
-      "Resolve unmatched shipments before finalizing this monthly report.",
-    );
-  }
-
   await db
     .update(monthlyBillingReport)
     .set({
@@ -596,6 +591,7 @@ export const getMonthlyBillingReport = async ({
       specialProjectHours: monthlyBillingReport.specialProjectHours,
       generatedAt: monthlyBillingReport.generatedAt,
       finalizedAt: monthlyBillingReport.finalizedAt,
+      zohoInvoiceId: monthlyBillingReport.zohoInvoiceId,
       account: {
         id: shipstationAccount.id,
         slug: shipstationAccount.slug,

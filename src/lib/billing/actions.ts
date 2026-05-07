@@ -1,14 +1,25 @@
 "use server";
 
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
+import { db } from "@/db";
+import { monthlyBillingReport } from "@/db/schema/billing";
 import { requireAdmin } from "@/lib/auth/access";
 import type { MonthlyBillingMetricsActionState } from "@/lib/billing/action-state";
-import type { BillingManualMetrics } from "@/lib/billing/types";
+import { buildInvoiceParams } from "@/lib/billing/invoice-builder";
+import type {
+  BillingAccountSlug,
+  BillingManualMetrics,
+} from "@/lib/billing/types";
+import { isVendorSlug } from "@/lib/shipments/vendor-colors";
+import { createZohoInvoice } from "@/lib/zoho/books";
+import { buildZohoInvoiceUrl } from "@/lib/zoho/urls";
 
 import {
   finalizeMonthlyBillingReport,
   generateMonthlyBillingReport,
+  getMonthlyBillingReport,
   updateMonthlyBillingReportManualMetrics,
 } from "./reports";
 
@@ -17,6 +28,10 @@ export type MonthlyBillingActionResult = {
   message: string;
   reportId?: string;
 };
+
+export type CreateZohoInvoiceActionResult =
+  | { ok: true; invoiceId: string; invoiceUrl: string }
+  | { ok: false; message: string };
 
 const revalidateBillingPages = () => {
   revalidatePath("/admin/reports/monthly");
@@ -259,6 +274,66 @@ export const saveMonthlyBillingReportManualMetricsAction = async (
           ? error.message
           : "Failed to save the monthly report metrics.",
       manualMetrics: previousState.manualMetrics ?? manualMetrics,
+    };
+  }
+};
+
+export const createZohoInvoiceAction = async ({
+  reportId,
+}: {
+  reportId: string;
+}): Promise<CreateZohoInvoiceActionResult> => {
+  await requireAdmin();
+
+  try {
+    const detail = await getMonthlyBillingReport({ reportId });
+
+    if (detail.report.status !== "finalized") {
+      return {
+        ok: false,
+        message: "Finalize the report before creating a Zoho invoice.",
+      };
+    }
+
+    if (detail.report.zohoInvoiceId) {
+      return {
+        ok: true,
+        invoiceId: detail.report.zohoInvoiceId,
+        invoiceUrl: buildZohoInvoiceUrl(detail.report.zohoInvoiceId),
+      };
+    }
+
+    const slug = detail.report.account.slug;
+    if (!isVendorSlug(slug)) {
+      return {
+        ok: false,
+        message: `Account slug "${slug}" is not a configured billing account.`,
+      };
+    }
+
+    const invoice = await createZohoInvoice(
+      buildInvoiceParams(detail, slug as BillingAccountSlug),
+    );
+
+    await db
+      .update(monthlyBillingReport)
+      .set({ zohoInvoiceId: invoice.invoiceId })
+      .where(eq(monthlyBillingReport.id, reportId));
+
+    revalidateBillingPages();
+
+    return {
+      ok: true,
+      invoiceId: invoice.invoiceId,
+      invoiceUrl: invoice.invoiceUrl ?? buildZohoInvoiceUrl(invoice.invoiceId),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "Failed to create Zoho invoice.",
     };
   }
 };

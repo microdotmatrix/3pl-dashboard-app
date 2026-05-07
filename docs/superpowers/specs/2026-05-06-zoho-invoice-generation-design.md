@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-06
 **Branch:** codex/invoice-generation-with-zoho
-**Status:** Approved, pending implementation plan
+**Status:** Approved, revised for AI SDK v6 + AI Elements implementation
 
 ---
 
@@ -11,9 +11,9 @@
 Add two surfaces to the monthly billing reports page that allow admins to create Zoho Books draft invoices from finalized monthly billing reports and interact with a conversational billing assistant:
 
 1. **"Create Draft Invoice" button** — one-click, deterministic server action that maps a finalized report to a Zoho Books draft invoice via Membrane.
-2. **Billing Assistant drawer** — slide-out conversational AI agent (Vercel AI SDK + OpenRouter) with Zoho Books tools and report context, for special requests, modifications, and ad-hoc questions.
+2. **Billing Assistant drawer** — slide-out conversational AI agent (Vercel AI SDK v6 + OpenRouter) with Zoho Books tools and report context, for special requests, modifications, and ad-hoc questions.
 
-Both surfaces share a common `src/lib/zoho/` tool layer backed by the Membrane SDK.
+Both surfaces share a common `src/lib/zoho/` tool layer backed by the Membrane SDK. The assistant uses AI SDK v6's UI message stream format end-to-end and renders responses with the already-installed AI Elements components in `src/components/ai-elements/`.
 
 ---
 
@@ -39,25 +39,24 @@ src/
       invoice-builder.ts # pure fn: maps finalized report → Zoho invoice params
   app/
     api/
-      membrane-token/
-        route.ts         # GET, admin-gated, returns short-lived Membrane JWT
       admin/
         billing/
           agent/
-            route.ts     # POST streaming route: Vercel AI SDK + OpenRouter + Zoho tools
+            route.ts     # POST streaming route: ToolLoopAgent + createAgentUIStreamResponse + Zoho tools
   components/
     admin/
       monthly-report-actions.tsx      # gains "Create Draft Invoice" button + drawer trigger
-      billing-assistant-drawer.tsx    # new slide-out Sheet with useChat
+      billing-assistant-drawer.tsx    # new slide-out Sheet with useChat + AI Elements
 ```
 
 **Modified files:**
 - `src/lib/billing/types.ts` — add `additionalCartonsCount` to `BillingManualMetrics`
-- `src/db/schema/billing.ts` — add `additional_carton_count` (int, default 0) and `zoho_invoice_id` (text, nullable) to `monthly_billing_report`
+- `src/db/schema/billing.ts` — add `zoho_invoice_id` (text, nullable) to `monthly_billing_report`
 - `src/lib/billing/reports.ts` — include `additionalCartonsCount` in the `manualMetrics` object assembled by `getMonthlyBillingReportForPeriod` (individual DB columns are assembled into the `BillingManualMetrics` shape in this query layer)
 - `src/components/admin/monthly-report-metrics-form.tsx` — add `additionalCartonsCount` field
 - `src/lib/billing/actions.ts` — add `createZohoInvoiceAction` (file already updated with `additionalCartonsCount` parsing)
 - `src/env.ts` — add Membrane + OpenRouter env vars
+- `src/app/globals.css` — add the required Streamdown source import for AI Elements message rendering
 - `src/app/admin/reports/monthly/page.tsx` — pass `zohoInvoiceId` to `MonthlyReportActions`
 
 ---
@@ -68,7 +67,6 @@ src/
 
 | Column | Type | Default | Purpose |
 |---|---|---|---|
-| `additional_carton_count` | integer | 0 | Manual metric: full cartons in storage at month end (Storage – Carton line item) |
 | `zoho_invoice_id` | text | null | Zoho Books invoice ID, set after successful draft creation |
 
 ### Type update (`BillingManualMetrics`)
@@ -98,7 +96,7 @@ Server-only. Three exported functions:
 - **`listZohoInvoices(customerId)`** — lists recent invoices for a contact. Used by the agent.
 - **`getZohoInvoice(invoiceId)`** — retrieves a single invoice. Used by the agent.
 
-All three use `MEMBRANE_ZOHO_CONNECTION_ID` to scope requests to the correct Zoho Books connection.
+All three use `MEMBRANE_ZOHO_CONNECTION_ID` to scope requests to the correct Zoho Books connection. Before wiring the wrapper, implementation must verify the actual Membrane action names and output shapes against the real Zoho Books connection instead of assuming the default connector keys.
 
 ### `src/lib/zoho/contact-map.ts`
 
@@ -113,12 +111,6 @@ export const ZOHO_CONTACT_IDS: Record<string, string> = {
   ryot: "",     // fill in Zoho Books contact ID for Ryot
 }
 ```
-
-### `src/app/api/membrane-token/route.ts`
-
-`GET` handler. Requires admin auth. Generates and returns a short-lived Membrane JWT for potential client-side SDK use in the drawer.
-
----
 
 ## Invoice Builder
 
@@ -156,7 +148,7 @@ Pure function `buildInvoiceParams(report, accountSlug)`. No side effects.
 ### `createZohoInvoiceAction({ reportId })` (server action)
 
 1. `requireAdmin()`
-2. Load report from DB; reject if `status !== "finalized"` or `zoho_invoice_id` already set
+2. Load report from DB; reject if `status !== "finalized"`. If `zoho_invoice_id` is already set, return the existing invoice metadata instead of creating a duplicate.
 3. `buildInvoiceParams(report, accountSlug)`
 4. `createZohoInvoice(params)` via `zoho/books.ts`
 5. Write `zoho_invoice_id` to the report row in DB
@@ -180,10 +172,11 @@ Pure function `buildInvoiceParams(report, accountSlug)`. No side effects.
 ### `src/app/api/admin/billing/agent/route.ts`
 
 - `POST`, admin-auth-gated
-- Accepts `{ messages: CoreMessage[], reportId: string }`
+- Accepts `{ messages: UIMessage[], reportId: string }`
 - Loads report from DB at request time to inject fresh context into system prompt
-- Uses `streamText` from Vercel AI SDK with OpenRouter (model: `anthropic/claude-sonnet-4-6`)
-- Returns streaming response
+- Instantiates a request-scoped `ToolLoopAgent` from Vercel AI SDK v6 with OpenRouter (model: `anthropic/claude-sonnet-4.6`)
+- Returns `createAgentUIStreamResponse(...)` so the client receives a proper AI SDK UI message stream
+- Sets an explicit loop limit (`stopWhen: stepCountIs(5)`) for tool-calling safety and predictable behavior
 
 **System prompt includes:**
 - Client name, period, report status, all metric values (injected at request time)
@@ -201,11 +194,13 @@ Pure function `buildInvoiceParams(report, accountSlug)`. No side effects.
 
 ### `src/components/admin/billing-assistant-drawer.tsx`
 
-- Client component using `useChat` from Vercel AI SDK
+- Client component using `useChat` from `@ai-sdk/react` with `DefaultChatTransport`
 - Trigger: "Assistant" button in `MonthlyReportActions`
 - Renders as a shadcn `Sheet` from the right
+- Uses AI Elements primitives already installed in `src/components/ai-elements/`: `Conversation`, `Message`, `MessageContent`, `MessageResponse`, `Tool`, and `PromptInput`
+- AI-generated text is always rendered through `MessageResponse`; tool calls render with the AI Elements tool UI rather than raw JSON
 - Props: `reportId`, `accountSlug`, `reportStatus`, `periodLabel`, `zohoInvoiceId`
-- On `createDraftInvoice` tool success: a `useEffect` watches the `messages` array for a message with `role === "tool"` and `toolName === "createDraftInvoice"` containing a success payload, then calls `router.refresh()` to sync the parent page state
+- On `createDraftInvoice` tool success: a `useEffect` watches assistant message parts for a `tool-createDraftInvoice` part in `output-available` state with `ok: true`, then calls `router.refresh()` to sync the parent page state
 - Available on all report statuses; invoice creation tool self-guards on status
 
 ---

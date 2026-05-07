@@ -64,6 +64,7 @@ export const monthlyBillingReport = pgTable(
       .notNull()
       .defaultNow(),
     finalizedAt: timestamp("finalized_at", { withTimezone: true }),
+    zohoInvoiceId: text("zoho_invoice_id"),
   },
   (t) => [
     uniqueIndex("monthly_billing_report_account_period_idx").on(

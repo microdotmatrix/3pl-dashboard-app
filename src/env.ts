@@ -13,6 +13,10 @@ export const env = createEnv({
     CRON_SECRET: z.string().min(16),
     BILLING_RATES_SPREADSHEET_ID: z.string().min(1).optional(),
     BILLING_RATES_GID: z.string().min(1).optional(),
+    MEMBRANE_WORKSPACE_KEY: z.string().min(1),
+    MEMBRANE_WORKSPACE_SECRET: z.string().min(1),
+    MEMBRANE_ZOHO_CONNECTION_ID: z.string().min(1),
+    OPENROUTER_API_KEY: z.string().min(1),
   },
   client: {},
   runtimeEnv: {
@@ -26,5 +30,9 @@ export const env = createEnv({
     CRON_SECRET: process.env.CRON_SECRET,
     BILLING_RATES_SPREADSHEET_ID: process.env.BILLING_RATES_SPREADSHEET_ID,
     BILLING_RATES_GID: process.env.BILLING_RATES_GID,
+    MEMBRANE_WORKSPACE_KEY: process.env.MEMBRANE_WORKSPACE_KEY,
+    MEMBRANE_WORKSPACE_SECRET: process.env.MEMBRANE_WORKSPACE_SECRET,
+    MEMBRANE_ZOHO_CONNECTION_ID: process.env.MEMBRANE_ZOHO_CONNECTION_ID,
+    OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
   },
 });
