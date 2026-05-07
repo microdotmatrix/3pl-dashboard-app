@@ -17,12 +17,15 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
+  type CreateZohoInvoiceActionResult,
   createZohoInvoiceAction,
   finalizeMonthlyBillingReportAction,
   generateMonthlyBillingReportAction,
-  type CreateZohoInvoiceActionResult,
   type MonthlyBillingActionResult,
+  type RevertMonthlyBillingReportActionResult,
+  revertMonthlyBillingReportAction,
 } from "@/lib/billing/actions";
 import type {
   BillingAccountSlug,
@@ -45,7 +48,8 @@ type MonthlyReportActionsProps = {
 
 type AnyResult =
   | { kind: "report"; result: MonthlyBillingActionResult }
-  | { kind: "invoice"; result: CreateZohoInvoiceActionResult };
+  | { kind: "invoice"; result: CreateZohoInvoiceActionResult }
+  | { kind: "revert"; result: RevertMonthlyBillingReportActionResult };
 
 export const MonthlyReportActions = ({
   accountSlug,
@@ -63,6 +67,9 @@ export const MonthlyReportActions = ({
   const [isGenerating, startGenerating] = useTransition();
   const [isFinalizing, startFinalizing] = useTransition();
   const [isCreatingInvoice, startCreatingInvoice] = useTransition();
+  const [isReverting, startReverting] = useTransition();
+  const [revertReason, setRevertReason] = useState("");
+  const [revertOpen, setRevertOpen] = useState(false);
   const [latest, setLatest] = useState<AnyResult | null>(null);
 
   const handleGenerate = () => {
@@ -106,6 +113,26 @@ export const MonthlyReportActions = ({
     });
   };
 
+  const handleRevert = () => {
+    if (!reportId) return;
+    const trimmed = revertReason.trim();
+    if (trimmed.length < 3) return;
+
+    startReverting(async () => {
+      const result = await revertMonthlyBillingReportAction({
+        reportId,
+        reason: trimmed,
+      });
+
+      setLatest({ kind: "revert", result });
+      if (result.ok) {
+        setRevertReason("");
+        setRevertOpen(false);
+        router.refresh();
+      }
+    });
+  };
+
   const generateLabel =
     reportStatus === "draft" ? "Regenerate draft" : "Generate draft";
   const finalizeDisabled =
@@ -114,6 +141,11 @@ export const MonthlyReportActions = ({
     reportStatus === "finalized" && reportId && !zohoInvoiceId;
   const showOpenInvoice =
     reportStatus === "finalized" && reportId && zohoInvoiceId;
+  const showRevert = reportStatus === "finalized" && Boolean(reportId);
+  const revertSubmitDisabled = isReverting || revertReason.trim().length < 3;
+  const revertDescription = zohoInvoiceId
+    ? `This will void invoice ${zohoInvoiceId} in Zoho and reopen the ${periodLabel} report so metrics can be edited. The voided invoice ID will be recorded in this report's history.`
+    : `This will reopen the ${periodLabel} report for editing. No Zoho cleanup is needed because no invoice has been linked yet.`;
 
   const banner = (() => {
     if (!latest) {
@@ -126,6 +158,18 @@ export const MonthlyReportActions = ({
         <Alert variant={result.ok ? "default" : "destructive"}>
           <AlertTitle>
             {result.ok ? "Report updated" : "Action failed"}
+          </AlertTitle>
+          <AlertDescription>{result.message}</AlertDescription>
+        </Alert>
+      );
+    }
+
+    if (latest.kind === "revert") {
+      const result = latest.result;
+      return (
+        <Alert variant={result.ok ? "default" : "destructive"}>
+          <AlertTitle>
+            {result.ok ? "Report reverted" : "Revert failed"}
           </AlertTitle>
           <AlertDescription>{result.message}</AlertDescription>
         </Alert>
@@ -172,11 +216,7 @@ export const MonthlyReportActions = ({
         </Button>
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={finalizeDisabled}
-            >
+            <Button type="button" variant="outline" disabled={finalizeDisabled}>
               {isFinalizing ? "Finalizing\u2026" : "Finalize report"}
             </Button>
           </AlertDialogTrigger>
@@ -197,6 +237,66 @@ export const MonthlyReportActions = ({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+        {showRevert ? (
+          <AlertDialog
+            open={revertOpen}
+            onOpenChange={(next) => {
+              if (!isReverting) {
+                setRevertOpen(next);
+                if (!next) {
+                  setRevertReason("");
+                }
+              }
+            }}
+          >
+            <AlertDialogTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                className="border-destructive/40 text-destructive hover:bg-destructive/10"
+                disabled={isReverting}
+              >
+                {isReverting ? "Reverting…" : "Revert finalization"}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Revert finalization?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {revertDescription}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="flex flex-col gap-2">
+                <label htmlFor="revert-reason" className="text-sm font-medium">
+                  Reason (required)
+                </label>
+                <Textarea
+                  id="revert-reason"
+                  value={revertReason}
+                  onChange={(event) => setRevertReason(event.target.value)}
+                  placeholder="What needs to change?"
+                  rows={3}
+                  disabled={isReverting}
+                />
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isReverting}>
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(event) => {
+                    event.preventDefault();
+                    handleRevert();
+                  }}
+                  disabled={revertSubmitDisabled}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {isReverting ? "Reverting…" : "Revert finalization"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        ) : null}
         {reportId ? (
           <Button asChild type="button" variant="outline">
             <a href={`/api/admin/reports/monthly/${reportId}/csv`}>
