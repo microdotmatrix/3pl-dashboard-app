@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { user } from "@/db/schema/auth";
@@ -12,6 +12,8 @@ import {
   shipstationAccount,
   shipstationShipment,
 } from "@/db/schema/shipstation";
+
+import { voidZohoInvoice } from "@/lib/zoho/books";
 
 import { getRequiredBillingShipmentTagNames } from "./config";
 import { matchShipmentPackages } from "./dimension-match";
@@ -484,6 +486,108 @@ export const finalizeMonthlyBillingReport = async ({
       finalizedAt: new Date(),
     })
     .where(eq(monthlyBillingReport.id, reportId));
+
+  return getMonthlyBillingReport({ reportId });
+};
+
+export const revertMonthlyBillingReport = async ({
+  reportId,
+  reason,
+  userId,
+}: {
+  reportId: string;
+  reason: string;
+  userId: string;
+}): Promise<MonthlyBillingReportDetail> => {
+  const trimmedReason = reason.trim();
+  if (trimmedReason.length < 3) {
+    throw new Error("Provide a reason of at least 3 characters.");
+  }
+
+  const [existing] = await db
+    .select({
+      id: monthlyBillingReport.id,
+      status: monthlyBillingReport.status,
+      zohoInvoiceId: monthlyBillingReport.zohoInvoiceId,
+    })
+    .from(monthlyBillingReport)
+    .where(eq(monthlyBillingReport.id, reportId))
+    .limit(1);
+
+  if (!existing) {
+    throw new Error("Monthly billing report not found.");
+  }
+
+  if (existing.status !== "finalized") {
+    throw new Error("Only finalized reports can be reverted.");
+  }
+
+  if (existing.zohoInvoiceId) {
+    try {
+      await voidZohoInvoice(existing.zohoInvoiceId);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Zoho Books request failed.";
+      console.error("revertMonthlyBillingReport: Zoho invoice void failed", {
+        reportId,
+        invoiceId: existing.zohoInvoiceId,
+        message,
+      });
+      throw new Error(`Cannot revert: ${message}`);
+    }
+  }
+
+  const invoiceUnchanged = existing.zohoInvoiceId
+    ? eq(monthlyBillingReport.zohoInvoiceId, existing.zohoInvoiceId)
+    : isNull(monthlyBillingReport.zohoInvoiceId);
+
+  const updateValues = {
+    status: "draft" as const,
+    finalizedAt: null,
+    zohoInvoiceId: null,
+    lastRevertedAt: new Date(),
+    lastRevertedBy: userId,
+    lastRevertReason: trimmedReason,
+    ...(existing.zohoInvoiceId
+      ? {
+          previousZohoInvoiceIds: sql<string[]>`
+            ${monthlyBillingReport.previousZohoInvoiceIds}
+            || jsonb_build_array(${existing.zohoInvoiceId})
+          `,
+        }
+      : {}),
+  };
+
+  const [updated] = await db
+    .update(monthlyBillingReport)
+    .set(updateValues)
+    .where(
+      and(
+        eq(monthlyBillingReport.id, reportId),
+        eq(monthlyBillingReport.status, "finalized"),
+        invoiceUnchanged,
+      ),
+    )
+    .returning({ id: monthlyBillingReport.id });
+
+  if (!updated) {
+    const [latest] = await db
+      .select({
+        status: monthlyBillingReport.status,
+        zohoInvoiceId: monthlyBillingReport.zohoInvoiceId,
+      })
+      .from(monthlyBillingReport)
+      .where(eq(monthlyBillingReport.id, reportId))
+      .limit(1);
+
+    if (latest?.status !== "finalized") {
+      throw new Error("Only finalized reports can be reverted.");
+    }
+
+    throw new Error(
+      "Report invoice changed while reverting. Refresh and try again so the linked invoice can be voided.",
+    );
+  }
 
   return getMonthlyBillingReport({ reportId });
 };
