@@ -27,6 +27,7 @@ Add a "revert finalization" path that:
 - Building a generalized audit-log table.
 - Introducing a new permission role for revert (reuse the gate that protects `finalizeMonthlyBillingReportAction` and `createZohoInvoiceAction`).
 - Voiding paid invoices automatically. Paid invoices block revert; user must resolve the payment in Zoho first.
+- Setting up a unit-test framework. The project has no existing test infrastructure (`package.json` has no test scripts, no test files anywhere in `src/`). This work is verified manually against real data; standing up vitest is deferred to a separate effort.
 
 ## Decisions
 
@@ -157,26 +158,34 @@ The drawer's existing refresh mechanism picks up the new state on success (same 
 | Re-finalize after revert | Existing `finalizeMonthlyBillingReport` unchanged; sets fresh `finalizedAt`; history fields persist |
 | Re-create invoice after revert | Existing `createZohoInvoiceAction` unchanged; writes fresh `zohoInvoiceId` |
 
-## Testing
+## Verification
 
-**Unit tests for `revertMonthlyBillingReport`** (alongside any existing `src/lib/billing/reports.test.ts`; create the file if absent). Mock the Zoho client.
+The project has no automated test infrastructure, so verification is type-check + lint + manual run-through.
 
-- Happy path with linked invoice → status becomes draft, invoice voided, history fields populated, previous invoice id in array.
-- Happy path without linked invoice → status becomes draft, no Zoho call, history fields populated, previous invoice array unchanged.
-- Draft report → throws, no writes.
-- Empty / whitespace reason → throws before Zoho call.
-- Zoho returns "already voided" → treated as success.
-- Zoho returns 404 → treated as success, warning logged.
-- Zoho returns "paid" error → throws, DB row unchanged on re-fetch.
-- Concurrent revert (two callers, second sees locked-then-draft state) → second throws.
+**Type/lint guarantees:**
 
-**Action-layer integration tests** for `revertMonthlyBillingReportAction`:
+- `pnpm tsc --noEmit` (or `pnpm build`) passes.
+- `pnpm lint` (biome) passes.
+- Drizzle migration applies cleanly: `pnpm db:generate` produces a new SQL file, `pnpm db:migrate` runs it without errors.
 
-- Unauthenticated → rejected.
-- Authenticated but no access to vendor → rejected.
-- Successful path → `revalidatePath` called.
+**Manual sanity check on the real stuck April report** — the forcing example is the canonical fixture.
 
-**Manual sanity check on real April data.** The forcing example is the cleanest fixture. Once shipped: revert the stuck April report, verify the Zoho invoice flips to voided, verify metrics become editable, verify the history strip renders the previous invoice id with a working link.
+1. Pull up the finalized April report in the admin dashboard. Verify the new "Revert finalization" button is visible and that the existing Finalize/Generate buttons are correctly disabled.
+2. Click revert. Dialog should name the linked invoice id and the vendor + period correctly. Reason textarea should reject submit until ≥3 chars typed.
+3. Submit with a real reason. Confirm:
+   - Toast says "Report reverted. Invoice INV-XXXX voided in Zoho."
+   - Report status flips to draft, metrics inputs become editable.
+   - The Zoho Books UI (open in another tab) shows the invoice as voided.
+   - The "Last reverted by … reason: …" strip renders below the metrics with a working Zoho link to the now-voided invoice.
+4. Re-edit metrics, re-finalize, create a new invoice. Confirm:
+   - A new `zohoInvoiceId` is written.
+   - The history strip still shows the previously-voided invoice in `Previous invoices`.
+5. Open the BillingAssistantDrawer. Ask the agent to revert without typing the confirmation phrase — agent should refuse to call the tool. Provide the phrase + reason — agent should call the tool and the same flow runs.
+
+**Negative-path sanity checks** (using throwaway fixtures, not the April report):
+
+- Generate a draft report, finalize it, mark the linked Zoho invoice as paid in Zoho directly, then attempt revert. Expect the toast to surface the Zoho "cannot void: paid" error verbatim and the report to remain finalized.
+- Finalize a report without creating a Zoho invoice, then revert. Expect a toast that says metrics are editable again with no mention of an invoice.
 
 ## Files touched
 
