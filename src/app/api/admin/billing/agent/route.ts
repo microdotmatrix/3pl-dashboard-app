@@ -2,15 +2,18 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import {
   createAgentUIStreamResponse,
   stepCountIs,
-  tool,
   ToolLoopAgent,
+  tool,
   type UIMessage,
 } from "ai";
 import { z } from "zod";
 
 import { env } from "@/env";
 import { requireAdmin } from "@/lib/auth/access";
-import { createZohoInvoiceAction } from "@/lib/billing/actions";
+import {
+  createZohoInvoiceAction,
+  revertMonthlyBillingReportAction,
+} from "@/lib/billing/actions";
 import { getMonthlyBillingReport } from "@/lib/billing/reports";
 import { isVendorSlug } from "@/lib/shipments/vendor-colors";
 import {
@@ -57,6 +60,11 @@ const buildSystemPrompt = (
     "- Be direct and operational. No filler, no apologies.",
     "- Use tools to read live data; never invent invoice IDs or totals.",
     "",
+    "Revert protocol:",
+    "- When a user asks to revert a finalized report, you MUST: (1) state which invoice will be voided in Zoho and which vendor/period the report is for; (2) ask the user to provide a written reason and to reply with the exact phrase CONFIRM REVERT; (3) only then call the revertMonthlyBillingReport tool with both fields.",
+    "- Never call the revert tool on the first turn. Never paraphrase the confirmation phrase.",
+    "- If voiding fails (e.g., paid invoice), surface the error verbatim and do not retry. Tell the user to resolve the payment in Zoho first.",
+    "",
     "Current report:",
     `- Client: ${report.account.displayName} (${report.account.slug})`,
     `- Period: ${periodFmt.format(report.periodStart)}`,
@@ -85,14 +93,58 @@ const maybeGetCustomerId = (accountSlug: string): string | null => {
   }
 };
 
+const textFromMessage = (message: unknown): string => {
+  if (!message || typeof message !== "object") {
+    return "";
+  }
+
+  const maybe = message as {
+    role?: unknown;
+    content?: unknown;
+    parts?: unknown;
+  };
+
+  if (typeof maybe.content === "string") {
+    return maybe.content;
+  }
+
+  if (Array.isArray(maybe.parts)) {
+    return maybe.parts
+      .map((part) => {
+        if (!part || typeof part !== "object") {
+          return "";
+        }
+        const text = (part as { text?: unknown }).text;
+        return typeof text === "string" ? text : "";
+      })
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  return "";
+};
+
+const getLatestUserText = (messages: unknown[]): string => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index] as { role?: unknown };
+    if (message?.role === "user") {
+      return textFromMessage(message);
+    }
+  }
+
+  return "";
+};
+
 const buildAgent = ({
   detail,
   reportId,
   customerId,
+  latestUserText,
 }: {
   detail: Awaited<ReturnType<typeof getMonthlyBillingReport>>;
   reportId: string;
   customerId: string | null;
+  latestUserText: string;
 }) => {
   const openrouter = createOpenRouter({ apiKey: env.OPENROUTER_API_KEY });
 
@@ -116,6 +168,38 @@ const buildAgent = ({
             invoiceId: result.invoiceId,
             invoiceUrl: result.invoiceUrl,
             message: "Draft invoice created in Zoho Books.",
+          };
+        },
+      }),
+      revertMonthlyBillingReport: tool({
+        description:
+          "Revert the current finalized report back to draft and void the linked Zoho invoice. Requires a written reason and the exact confirmation phrase.",
+        inputSchema: z.object({
+          reason: z.string().min(3, "Reason must be at least 3 characters."),
+          confirm: z.literal("CONFIRM REVERT"),
+        }),
+        execute: async ({ reason }) => {
+          if (!latestUserText.includes("CONFIRM REVERT")) {
+            return {
+              ok: false,
+              message:
+                "The latest user message did not include CONFIRM REVERT.",
+            };
+          }
+
+          const result = await revertMonthlyBillingReportAction({
+            reportId,
+            reason,
+          });
+
+          if (!result.ok) {
+            return { ok: false, message: result.message };
+          }
+
+          return {
+            ok: true,
+            message: result.message,
+            voidedInvoiceId: result.voidedInvoiceId,
           };
         },
       }),
@@ -181,9 +265,10 @@ export const POST = async (request: Request) => {
   const { reportId, messages } = parsed.data;
   const detail = await getMonthlyBillingReport({ reportId });
   const customerId = maybeGetCustomerId(detail.report.account.slug);
+  const latestUserText = getLatestUserText(messages);
 
   return createAgentUIStreamResponse({
-    agent: buildAgent({ detail, reportId, customerId }),
+    agent: buildAgent({ detail, reportId, customerId, latestUserText }),
     uiMessages: messages as UIMessage[],
     abortSignal: request.signal,
   });
