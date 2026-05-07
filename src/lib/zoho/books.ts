@@ -333,3 +333,31 @@ export const getZohoInvoice = async (
     throw new Error(getErrorMessage(error));
   }
 };
+
+export const voidZohoInvoice = async (invoiceId: string): Promise<void> => {
+  const proxy = getZohoProxy();
+
+  try {
+    await proxy.post(`${ZOHO_INVOICES_PATH}/${invoiceId}/status/void`, {});
+  } catch (error) {
+    const message = getErrorMessage(error);
+    const lowered = message.toLowerCase();
+
+    if (lowered.includes("already") && lowered.includes("void")) {
+      return;
+    }
+
+    if (
+      lowered.includes("invoice does not exist") ||
+      lowered.includes("invalid invoice id") ||
+      lowered.includes("invoice not found")
+    ) {
+      console.warn(
+        `voidZohoInvoice: invoice ${invoiceId} not found in Zoho; treating as already gone.`,
+      );
+      return;
+    }
+
+    throw new Error(message);
+  }
+};
