@@ -552,7 +552,7 @@ export const revertMonthlyBillingReport = async ({
       ? {
           previousZohoInvoiceIds: sql<string[]>`
             ${monthlyBillingReport.previousZohoInvoiceIds}
-            || jsonb_build_array(${existing.zohoInvoiceId})
+            || jsonb_build_array(${existing.zohoInvoiceId}::text)
           `,
         }
       : {}),
