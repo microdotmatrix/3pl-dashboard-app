@@ -75,23 +75,39 @@ Order of operations:
 1. **Pre-validate (no DB writes yet).** Reject if `reason.trim().length < 3`.
 2. **Load report.** Reject if not found, or if `status !== "finalized"`.
 3. **Void in Zoho.** If `report.zohoInvoiceId != null`, call `voidZohoInvoice(report.zohoInvoiceId)`. On error, propagate as `Error("Cannot revert: " + zohoMessage)`. DB still untouched.
-4. **DB transaction** (`db.transaction(...)`):
-   - Re-select the report row with `.for("update")` to lock it. Re-check `status === "finalized"` — if not (a concurrent revert won), throw `"Only finalized reports can be reverted."`
-   - Compute `nextHistory = report.zohoInvoiceId ? [...previousZohoInvoiceIds, report.zohoInvoiceId] : previousZohoInvoiceIds`.
-   - Update: `status="draft"`, `finalizedAt=null`, `zohoInvoiceId=null`, `previousZohoInvoiceIds=nextHistory`, `lastRevertedAt=now()`, `lastRevertedBy=userId`, `lastRevertReason=reason.trim()`.
-   - Return updated row.
+4. **Atomic conditional DB update** (no `db.transaction(...)`; the app uses Drizzle's `neon-http` driver, whose transactions throw at runtime):
+   - Update only when `id` still matches, `status === "finalized"`, and `zohoInvoiceId` is unchanged from the pre-void read.
+   - If there was a linked invoice, append that exact invoice id to `previousZohoInvoiceIds` in SQL during the same update.
+   - Set: `status="draft"`, `finalizedAt=null`, `zohoInvoiceId=null`, `lastRevertedAt=now()`, `lastRevertedBy=userId`, `lastRevertReason=reason.trim()`.
+   - If no row is updated, re-read the report and throw a race-specific error. If another revert already won, throw `"Only finalized reports can be reverted."` If a Zoho invoice was attached after the pre-read, throw `"Report invoice changed while reverting. Refresh and try again so the linked invoice can be voided."`
 5. Caller (action wrapper) calls `revalidatePath("/admin/reports/monthly", "page")`.
 
-Idempotency on partial failure: if step 3 succeeds but step 4 fails (rare network blip), retrying the action will re-call `voidZohoInvoice`, which returns "already voided" success, and the tx runs. Consistent state.
+Idempotency on partial failure: if step 3 succeeds but step 4 fails or a concurrent caller wins, retrying the action will re-call `voidZohoInvoice`, which returns "already voided" success when appropriate. The conditional update prevents reverting a report after a different invoice has been attached.
+
+### Existing invoice creation hardening
+
+`createZohoInvoiceAction` must be hardened while adding revert, because invoice creation and revert mutate the same `zohoInvoiceId` state.
+
+After creating the Zoho invoice, write it back with a conditional update:
+
+- `id === reportId`
+- `status === "finalized"`
+- `zohoInvoiceId IS NULL`
+
+If the conditional update affects zero rows, the report changed while the external invoice was being created. Best-effort void the newly-created Zoho invoice immediately. If cleanup succeeds, return an error telling the user to refresh and try again. If cleanup fails, return an error that includes the new invoice id and instructs manual voiding in Zoho. This avoids silently orphaning real Zoho invoices.
+
+### Observability
+
+Membrane proxy calls should remain in the existing server-only Zoho module. For destructive invoice voiding, log structured server context on failures: `reportId`, `invoiceId`, and the normalized Zoho error message. Do not log Membrane credentials, JWTs, or full request headers. If the Membrane proxy exposes action/run identifiers in future SDK versions, include them in these logs and in admin-facing troubleshooting output.
 
 ### Server action wrapper
 
 `revertMonthlyBillingReportAction` in `src/lib/billing/actions.ts`. Mirrors the structure of `finalizeMonthlyBillingReportAction` and `createZohoInvoiceAction`:
 
 - Same admin auth gate.
-- Same vendor-access guard via `report.accountId`.
+- Same authorization scope as the existing billing actions (`requireAdmin()` today; add a narrower account/vendor guard only if one is introduced for billing generally).
 - Calls `revertMonthlyBillingReport` with the session user id.
-- Returns `{ ok: true, report }` or throws on failure (caller toasts the error).
+- Returns a small structured result (`ok`, `message`, `reportId`, `voidedInvoiceId`) so client UI does not receive a raw report record.
 
 ## UI surface
 
@@ -107,11 +123,11 @@ Idempotency on partial failure: if step 3 succeeds but step 4 fails (rare networ
   - Required `<Textarea>` labelled "Reason (required)". Submit disabled until ≥3 non-whitespace chars.
   - Buttons: `Cancel`, `Revert finalization` (destructive). Submit shows spinner while pending.
 
-### Toast feedback (Sonner; matches existing pattern)
+### Action feedback
 
 - Success with invoice: `"Report reverted. Invoice INV-XXXX voided in Zoho."`
 - Success without invoice: `"Report reverted. Metrics are editable again."`
-- Failure: surface Zoho error verbatim, e.g. `"Cannot revert: Cannot void this invoice as it has been paid."` Report stays finalized.
+- Failure: surface Zoho error verbatim in the existing inline Alert/banner pattern, e.g. `"Cannot revert: Cannot void this invoice as it has been paid."` Report stays finalized.
 
 ### Revert history strip
 
@@ -133,7 +149,7 @@ inputSchema: z.object({
 })
 ```
 
-Tool body calls the same `revertMonthlyBillingReport` server fn, passing the chat user's id. The literal-string `confirm` field is the safety: if the model invokes the tool with anything else, Zod rejects before any Zoho or DB call, and the tool result is a structured error fed back to the model.
+Tool body calls the same `revertMonthlyBillingReport` server fn through the server action. The literal-string `confirm` field is one guard: if the model invokes the tool with anything else, Zod rejects before any Zoho or DB call. The route must also verify that the latest user message text contains the exact phrase `CONFIRM REVERT`; this prevents the model from satisfying the confirmation field by itself.
 
 System-prompt addition (append to existing `system` string):
 
@@ -146,17 +162,19 @@ The drawer's existing refresh mechanism picks up the new state on success (same 
 | Case | Behavior |
 |---|---|
 | No `zohoInvoiceId` on report | Skip Zoho call, unfinalize only |
-| Zoho returns "already voided" | Success, continue to DB tx |
-| Zoho returns 404 / invoice-not-found | Success (warn), continue |
+| Zoho returns "already voided" | Success, continue to conditional DB update |
+| Zoho returns 404 / invoice-not-found | Success (warn), continue to conditional DB update |
 | Zoho returns "paid" or any other error | Throw verbatim, DB untouched |
 | `reason.trim().length < 3` | Throw before Zoho call |
 | `status === "draft"` | Throw `"Only finalized reports can be reverted."` |
 | Report not found | Throw `"Report not found."` |
 | Network blip after Zoho success | Retry is safe via "already voided" idempotency |
-| Two admins click revert simultaneously | First wins via `SELECT … FOR UPDATE`; second sees `status="draft"` after lock and throws |
+| Two admins click revert simultaneously | First conditional update wins; second updates zero rows, re-reads `status="draft"`, and throws |
+| Revert races with invoice creation | Revert updates zero rows if a new `zohoInvoiceId` appears; report stays finalized and user retries so that invoice can be voided |
+| Invoice creation races with revert | Create-invoice conditional write updates zero rows; newly-created Zoho invoice is best-effort voided to avoid an orphan |
 | Multiple revert cycles | `previousZohoInvoiceIds` accumulates oldest-first; `lastReverted*` reflects most recent only |
 | Re-finalize after revert | Existing `finalizeMonthlyBillingReport` unchanged; sets fresh `finalizedAt`; history fields persist |
-| Re-create invoice after revert | Existing `createZohoInvoiceAction` unchanged; writes fresh `zohoInvoiceId` |
+| Re-create invoice after revert | Hardened `createZohoInvoiceAction` writes a fresh `zohoInvoiceId` only if the report is still finalized and has no linked invoice |
 
 ## Verification
 
@@ -184,8 +202,8 @@ The project has no automated test infrastructure, so verification is type-check 
 
 **Negative-path sanity checks** (using throwaway fixtures, not the April report):
 
-- Generate a draft report, finalize it, mark the linked Zoho invoice as paid in Zoho directly, then attempt revert. Expect the toast to surface the Zoho "cannot void: paid" error verbatim and the report to remain finalized.
-- Finalize a report without creating a Zoho invoice, then revert. Expect a toast that says metrics are editable again with no mention of an invoice.
+- Generate a draft report, finalize it, mark the linked Zoho invoice as paid in Zoho directly, then attempt revert. Expect the UI feedback to surface the Zoho "cannot void: paid" error verbatim and the report to remain finalized.
+- Finalize a report without creating a Zoho invoice, then revert. Expect UI feedback that says metrics are editable again with no mention of an invoice.
 
 ## Files touched
 

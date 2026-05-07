@@ -4,9 +4,9 @@
 
 **Goal:** Add an end-to-end "revert finalization" path so an ops manager can undo a mistakenly-finalized monthly billing report, void the linked Zoho invoice, edit the metrics, and create a fresh invoice.
 
-**Architecture:** A single new server action (`revertMonthlyBillingReportAction`) calls a new core function (`revertMonthlyBillingReport`) which voids the Zoho invoice (when one exists), then runs a `SELECT … FOR UPDATE` transaction that flips the report back to `draft`, clears `finalizedAt` and `zohoInvoiceId`, and writes audit fields (`lastRevertedAt`, `lastRevertedBy`, `lastRevertReason`, plus an append to `previousZohoInvoiceIds`). The action is exposed through an alert-dialog button on the report-actions toolbar and through an explicit-confirmation tool on the BillingAssistantDrawer's AI agent.
+**Architecture:** A single new server action (`revertMonthlyBillingReportAction`) calls a new core function (`revertMonthlyBillingReport`) which voids the Zoho invoice (when one exists), then performs an atomic conditional `UPDATE ... RETURNING` that flips the report back to `draft`, clears `finalizedAt` and `zohoInvoiceId`, and writes audit fields (`lastRevertedAt`, `lastRevertedBy`, `lastRevertReason`, plus an SQL append to `previousZohoInvoiceIds`). This intentionally avoids `db.transaction(...)` / `SELECT ... FOR UPDATE` because the current app uses Drizzle's `neon-http` driver, whose transactions throw at runtime. The action is exposed through an alert-dialog button on the report-actions toolbar and through an explicit-confirmation tool on the BillingAssistantDrawer's AI agent. The existing invoice-creation action is also hardened with a conditional DB write and best-effort cleanup for newly-created invoices if a race is lost.
 
-**Tech Stack:** Next.js 16 App Router, React 19, TypeScript, Drizzle ORM (postgres-core, Neon serverless), Better-Auth for sessions, Membrane for Zoho proxy, AI SDK v6 for the agent, shadcn/ui (alert-dialog, button, textarea), sonner toasts, biome for lint, drizzle-kit for migrations. **No test framework** — verification is type-check + lint + manual run-through (see Task 9).
+**Tech Stack:** Next.js 16 App Router, React 19, TypeScript, Drizzle ORM (postgres-core, Neon serverless via `neon-http`), Better-Auth for sessions, Membrane for Zoho proxy, AI SDK v6 for the agent, shadcn/ui (alert-dialog, button, textarea), inline Alert feedback, biome for lint, drizzle-kit for migrations. **No test framework** — verification is type-check + lint + manual run-through (see Task 9).
 
 **Spec:** `docs/superpowers/specs/2026-05-07-revert-finalized-report-design.md`
 
@@ -23,7 +23,7 @@
 | `src/lib/billing/actions.ts` | Modify | Add `revertMonthlyBillingReportAction` server action wrapper |
 | `src/components/admin/monthly-report-actions.tsx` | Modify | Add "Revert finalization" button + AlertDialog with reason textarea |
 | `src/app/admin/reports/monthly/page.tsx` | Modify | Render revert-history strip below metrics when present; pass new fields through to `MonthlyReportActions` if needed |
-| `src/app/api/admin/billing/agent/route.ts` | Modify | Add `revertMonthlyBillingReport` agent tool with `confirm: z.literal("CONFIRM REVERT")` guard; append revert paragraph to system prompt; thread session user id |
+| `src/app/api/admin/billing/agent/route.ts` | Modify | Add `revertMonthlyBillingReport` agent tool with `confirm: z.literal("CONFIRM REVERT")` plus latest-user-message verification; append revert paragraph to system prompt |
 
 ---
 
@@ -338,7 +338,13 @@ EOF
 
 - [ ] **Step 1: Add the void import**
 
-In `src/lib/billing/reports.ts`, the file currently has no import from `@/lib/zoho`. Add this line in the import block, alphabetically near the other `@/lib` imports — directly below the existing `import { matchShipmentPackages }` line and above `import { loadBillingRateSheet }`:
+In `src/lib/billing/reports.ts`, update the existing Drizzle import to add `isNull`:
+
+```ts
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+```
+
+Then add this line in the import block, alphabetically near the other `@/lib` imports — directly below the existing `import { matchShipmentPackages }` line and above `import { loadBillingRateSheet }`:
 
 ```ts
 import { voidZohoInvoice } from "@/lib/zoho/books";
@@ -382,52 +388,81 @@ export const revertMonthlyBillingReport = async ({
   }
 
   if (existing.zohoInvoiceId) {
-    await voidZohoInvoice(existing.zohoInvoiceId);
+    try {
+      await voidZohoInvoice(existing.zohoInvoiceId);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Zoho Books request failed.";
+      console.error("revertMonthlyBillingReport: Zoho invoice void failed", {
+        reportId,
+        invoiceId: existing.zohoInvoiceId,
+        message,
+      });
+      throw new Error(`Cannot revert: ${message}`);
+    }
   }
 
-  await db.transaction(async (tx) => {
-    const [locked] = await tx
+  const invoiceUnchanged = existing.zohoInvoiceId
+    ? eq(monthlyBillingReport.zohoInvoiceId, existing.zohoInvoiceId)
+    : isNull(monthlyBillingReport.zohoInvoiceId);
+
+  const updateValues = {
+    status: "draft" as const,
+    finalizedAt: null,
+    zohoInvoiceId: null,
+    lastRevertedAt: new Date(),
+    lastRevertedBy: userId,
+    lastRevertReason: trimmedReason,
+    ...(existing.zohoInvoiceId
+      ? {
+          previousZohoInvoiceIds: sql<string[]>`
+            ${monthlyBillingReport.previousZohoInvoiceIds}
+            || jsonb_build_array(${existing.zohoInvoiceId})
+          `,
+        }
+      : {}),
+  };
+
+  const [updated] = await db
+    .update(monthlyBillingReport)
+    .set(updateValues)
+    .where(
+      and(
+        eq(monthlyBillingReport.id, reportId),
+        eq(monthlyBillingReport.status, "finalized"),
+        invoiceUnchanged,
+      ),
+    )
+    .returning({ id: monthlyBillingReport.id });
+
+  if (!updated) {
+    const [latest] = await db
       .select({
         status: monthlyBillingReport.status,
         zohoInvoiceId: monthlyBillingReport.zohoInvoiceId,
-        previousZohoInvoiceIds: monthlyBillingReport.previousZohoInvoiceIds,
       })
       .from(monthlyBillingReport)
       .where(eq(monthlyBillingReport.id, reportId))
-      .for("update")
       .limit(1);
 
-    if (!locked || locked.status !== "finalized") {
+    if (latest?.status !== "finalized") {
       throw new Error("Only finalized reports can be reverted.");
     }
 
-    const previousIds = locked.previousZohoInvoiceIds ?? [];
-    const nextHistory = locked.zohoInvoiceId
-      ? [...previousIds, locked.zohoInvoiceId]
-      : previousIds;
-
-    await tx
-      .update(monthlyBillingReport)
-      .set({
-        status: "draft",
-        finalizedAt: null,
-        zohoInvoiceId: null,
-        previousZohoInvoiceIds: nextHistory,
-        lastRevertedAt: new Date(),
-        lastRevertedBy: userId,
-        lastRevertReason: trimmedReason,
-      })
-      .where(eq(monthlyBillingReport.id, reportId));
-  });
+    throw new Error(
+      "Report invoice changed while reverting. Refresh and try again so the linked invoice can be voided.",
+    );
+  }
 
   return getMonthlyBillingReport({ reportId });
 };
 ```
 
 Notes for the implementer:
-- The pre-load (`existing`) is intentionally outside the transaction. We only enter the transaction after Zoho has acknowledged the void, so we don't hold a row lock across a network call.
-- Inside the transaction, the `.for("update")` re-select serializes against any concurrent revert. If a competing revert committed first, the second sees `status="draft"` and throws.
-- `previousZohoInvoiceIds: nextHistory` is the entire array. Drizzle's jsonb update replaces the column, so we don't need a SQL-level append — the in-memory concat is correct because we hold the row lock.
+- The pre-load (`existing`) is intentionally before the Zoho call. We do not hold a database lock across a network call.
+- Do **not** use `db.transaction(...)` here. The current app uses `drizzle-orm/neon-http`; Drizzle's Neon HTTP session exposes a `transaction` type but throws `No transactions support in neon-http driver` at runtime.
+- The conditional `UPDATE` is the concurrency guard. It only succeeds if the report is still finalized and the invoice id is exactly what we voided (or still null when there was no invoice).
+- The SQL append is atomic with the status flip. It avoids a read-modify-write race on `previousZohoInvoiceIds` without requiring a transaction.
 
 - [ ] **Step 3: Type-check**
 
@@ -448,11 +483,11 @@ git add src/lib/billing/reports.ts
 git commit -m "$(cat <<'EOF'
 feat(billing): add revertMonthlyBillingReport
 
-Voids the linked Zoho invoice (when present), then runs a row-locked
-transaction that flips status back to draft, clears finalizedAt and
-zohoInvoiceId, appends the old invoice id to previousZohoInvoiceIds,
-and stamps lastRevertedAt/By/Reason. Concurrent reverts are serialized
-by SELECT ... FOR UPDATE; the second caller throws.
+Voids the linked Zoho invoice (when present), then runs an atomic
+conditional update that flips status back to draft, clears finalizedAt
+and zohoInvoiceId, appends the old invoice id to previousZohoInvoiceIds,
+and stamps lastRevertedAt/By/Reason. Concurrent changes update zero
+rows and return a retryable conflict message.
 EOF
 )"
 ```
@@ -465,6 +500,30 @@ EOF
 - Modify: `src/lib/billing/actions.ts`
 
 - [ ] **Step 1: Update imports**
+
+At the top of `src/lib/billing/actions.ts`, replace:
+
+```ts
+import { eq } from "drizzle-orm";
+```
+
+with:
+
+```ts
+import { and, eq, isNull } from "drizzle-orm";
+```
+
+Then replace the existing Zoho Books import:
+
+```ts
+import { createZohoInvoice } from "@/lib/zoho/books";
+```
+
+with:
+
+```ts
+import { createZohoInvoice, voidZohoInvoice } from "@/lib/zoho/books";
+```
 
 In `src/lib/billing/actions.ts`, the existing import block has:
 
@@ -489,7 +548,63 @@ import {
 } from "./reports";
 ```
 
-- [ ] **Step 2: Add the result type**
+- [ ] **Step 2: Harden `createZohoInvoiceAction` against revert races**
+
+Inside `createZohoInvoiceAction`, replace the unconditional DB write:
+
+```ts
+    await db
+      .update(monthlyBillingReport)
+      .set({ zohoInvoiceId: invoice.invoiceId })
+      .where(eq(monthlyBillingReport.id, reportId));
+```
+
+with this conditional write + cleanup:
+
+```ts
+    const [linked] = await db
+      .update(monthlyBillingReport)
+      .set({ zohoInvoiceId: invoice.invoiceId })
+      .where(
+        and(
+          eq(monthlyBillingReport.id, reportId),
+          eq(monthlyBillingReport.status, "finalized"),
+          isNull(monthlyBillingReport.zohoInvoiceId),
+        ),
+      )
+      .returning({ id: monthlyBillingReport.id });
+
+    if (!linked) {
+      try {
+        await voidZohoInvoice(invoice.invoiceId);
+      } catch (voidError) {
+        const message =
+          voidError instanceof Error
+            ? voidError.message
+            : "Zoho Books cleanup failed.";
+        console.error("createZohoInvoiceAction: orphan cleanup failed", {
+          reportId,
+          invoiceId: invoice.invoiceId,
+          message,
+        });
+
+        return {
+          ok: false,
+          message: `Invoice ${invoice.invoiceId} was created in Zoho, but the report changed before it could be linked. Void it manually in Zoho. Cleanup error: ${message}`,
+        };
+      }
+
+      return {
+        ok: false,
+        message:
+          "The report changed while creating the invoice. The newly-created Zoho invoice was voided; refresh and try again.",
+      };
+    }
+```
+
+This guards the inverse race: if a revert wins after the Zoho invoice is created but before `zohoInvoiceId` is written, the app does not silently leave an orphaned invoice in Zoho.
+
+- [ ] **Step 3: Add the result type**
 
 Below the existing `CreateZohoInvoiceActionResult` type definition (around line 32-34), add:
 
@@ -504,7 +619,7 @@ export type RevertMonthlyBillingReportActionResult =
   | { ok: false; message: string };
 ```
 
-- [ ] **Step 3: Add the action**
+- [ ] **Step 4: Add the action**
 
 Append at the end of `src/lib/billing/actions.ts` (after `createZohoInvoiceAction`):
 
@@ -552,29 +667,31 @@ export const revertMonthlyBillingReportAction = async ({
 
 Note: the pre-fetch via `getMonthlyBillingReport` is just to capture `voidedInvoiceId` for the success message. The actual revert (including its own pre-validation) happens inside `revertMonthlyBillingReport`. If the pre-fetch fails (e.g. report not found), the catch turns it into a structured error result.
 
-- [ ] **Step 4: Type-check**
+- [ ] **Step 5: Type-check**
 
 Run: `pnpm exec tsc --noEmit`
 
 Expected: zero errors.
 
-- [ ] **Step 5: Lint**
+- [ ] **Step 6: Lint**
 
 Run: `pnpm lint`
 
 Expected: biome clean.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add src/lib/billing/actions.ts
 git commit -m "$(cat <<'EOF'
-feat(billing): add revertMonthlyBillingReportAction
+feat(billing): add revert action and harden invoice linking
 
 Server action that gates on requireAdmin, threads session.user.id
 into revertMonthlyBillingReport, and revalidates the monthly reports
 page. Returns the voided invoice id in the success payload so the UI
-can word the toast precisely.
+can word the success message precisely. Also makes the existing Zoho invoice
+link write conditional and voids a newly-created invoice if the report
+changes before the invoice id can be stored.
 EOF
 )"
 ```
@@ -1004,7 +1121,85 @@ Replace with:
     "",
 ```
 
-- [ ] **Step 3: Add the revert tool**
+- [ ] **Step 3: Capture the latest user confirmation text**
+
+Add these helpers above `buildAgent`:
+
+```ts
+const textFromMessage = (message: unknown): string => {
+  if (!message || typeof message !== "object") {
+    return "";
+  }
+
+  const maybe = message as {
+    role?: unknown;
+    content?: unknown;
+    parts?: unknown;
+  };
+
+  if (typeof maybe.content === "string") {
+    return maybe.content;
+  }
+
+  if (Array.isArray(maybe.parts)) {
+    return maybe.parts
+      .map((part) => {
+        if (!part || typeof part !== "object") {
+          return "";
+        }
+        const text = (part as { text?: unknown }).text;
+        return typeof text === "string" ? text : "";
+      })
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  return "";
+};
+
+const getLatestUserText = (messages: unknown[]): string => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index] as { role?: unknown };
+    if (message?.role === "user") {
+      return textFromMessage(message);
+    }
+  }
+
+  return "";
+};
+```
+
+Update `buildAgent` to accept `latestUserText`:
+
+```ts
+const buildAgent = ({
+  detail,
+  reportId,
+  customerId,
+  latestUserText,
+}: {
+  detail: Awaited<ReturnType<typeof getMonthlyBillingReport>>;
+  reportId: string;
+  customerId: string | null;
+  latestUserText: string;
+}) => {
+```
+
+Then in `POST`, compute and pass it:
+
+```ts
+  const latestUserText = getLatestUserText(messages);
+
+  return createAgentUIStreamResponse({
+    agent: buildAgent({ detail, reportId, customerId, latestUserText }),
+    uiMessages: messages as UIMessage[],
+    abortSignal: request.signal,
+  });
+```
+
+This is the server-enforced confirmation guard. The `confirm` tool field alone proves only that the model emitted the literal; checking the latest user text proves the user typed it.
+
+- [ ] **Step 4: Add the revert tool**
 
 Inside the `tools: { ... }` object (line 103), after `createDraftInvoice` (which ends at line 121 with `}),`), add:
 
@@ -1019,6 +1214,14 @@ Inside the `tools: { ... }` object (line 103), after `createDraftInvoice` (which
           confirm: z.literal("CONFIRM REVERT"),
         }),
         execute: async ({ reason }) => {
+          if (!latestUserText.includes("CONFIRM REVERT")) {
+            return {
+              ok: false,
+              message:
+                "The latest user message did not include CONFIRM REVERT.",
+            };
+          }
+
           const result = await revertMonthlyBillingReportAction({
             reportId,
             reason,
@@ -1037,19 +1240,19 @@ Inside the `tools: { ... }` object (line 103), after `createDraftInvoice` (which
       }),
 ```
 
-- [ ] **Step 4: Type-check**
+- [ ] **Step 5: Type-check**
 
 Run: `pnpm exec tsc --noEmit`
 
 Expected: zero errors.
 
-- [ ] **Step 5: Lint**
+- [ ] **Step 6: Lint**
 
 Run: `pnpm lint`
 
 Expected: biome clean.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add src/app/api/admin/billing/agent/route.ts
@@ -1057,9 +1260,10 @@ git commit -m "$(cat <<'EOF'
 feat(ai): expose revert tool to billing agent with confirm guard
 
 inputSchema requires confirm: z.literal('CONFIRM REVERT') so a
-hallucinated single-turn invocation is rejected by Zod before any
-side effect. System prompt instructs the model to surface what will
-be voided and require the literal phrase before calling.
+malformed invocation is rejected by Zod before any side effect. The
+tool also checks the latest user message for the literal phrase so the
+model cannot satisfy confirmation by itself. System prompt instructs
+the model to surface what will be voided before calling.
 EOF
 )"
 ```
@@ -1121,7 +1325,7 @@ This step requires a throwaway fixture; do not run it on production-relevant dat
 2. Open the invoice in Zoho Books and manually mark it as paid (record a full payment) — or alter its state so Zoho refuses voiding.
 3. Click "Revert finalization" in the admin dashboard. Provide a reason. Submit.
 4. Verify:
-   - The success toast is NOT shown.
+   - The success Alert is NOT shown.
    - A destructive Alert appears with a verbatim Zoho error (e.g. `Cannot revert: Cannot void this invoice as a payment has been recorded against it.`).
    - The report status remains `finalized`.
    - The `zohoInvoiceId` on the row remains intact (visible because the Open-in-Zoho button still links to it).
@@ -1155,16 +1359,16 @@ git commit -m "docs: log manual verification of revert-finalized-report feature"
 | Spec section | Implemented by |
 |---|---|
 | Decisions table row 1 (void in Zoho) | Task 3 (`voidZohoInvoice`), Task 4 (called from `revertMonthlyBillingReport`) |
-| Decisions row 2 (block on void failure) | Task 4 (errors propagate; transaction not entered) |
+| Decisions row 2 (block on void failure) | Task 4 (Zoho errors are prefixed with `Cannot revert:` before any DB write) |
 | Decisions row 3 (audit fields, required reason) | Task 1 (schema), Task 4 (validation + writes) |
 | Decisions row 4 (agent confirm-literal) | Task 8 (`z.literal("CONFIRM REVERT")` + system prompt) |
 | Decisions row 5 (single button, no-invoice case) | Task 6 (single dialog), Task 4 (skips Zoho when `zohoInvoiceId` is null) |
 | Data model (4 columns) | Task 1 |
 | `voidZohoInvoice` helper | Task 3 |
-| `revertMonthlyBillingReport` (load → void → tx with FOR UPDATE) | Task 4 |
-| `revertMonthlyBillingReportAction` (auth gate, vendor scope, revalidate) | Task 5 |
+| `revertMonthlyBillingReport` (load → void → atomic conditional update) | Task 4 |
+| `revertMonthlyBillingReportAction` (auth gate, concise result, revalidate) | Task 5 |
 | Report actions toolbar button + dialog | Task 6 |
-| Toast feedback (success / failure / no-invoice) | Task 6 (banner branches) |
+| Action feedback (success / failure / no-invoice) | Task 6 (banner branches) |
 | Revert history strip on report page | Task 7 |
 | Agent tool + system prompt addition | Task 8 |
 | Edge case table (all rows) | Task 3 (Zoho idempotency cases), Task 4 (status / reason / not-found / concurrency), Task 6 (UI gating) |
@@ -1174,6 +1378,6 @@ No spec rows are unimplemented.
 
 **Placeholder scan:** No "TBD," "TODO," or "implement later" markers in the plan. Every code-changing step shows the exact code. Every command has expected output described.
 
-**Type consistency:** `revertMonthlyBillingReport`'s parameter shape is `{ reportId, reason, userId }` everywhere it appears (Tasks 4, 5, 8). `RevertMonthlyBillingReportActionResult` has the same field set in its definition (Task 5) and consumers (Tasks 6, 8). The new schema column names (`previousZohoInvoiceIds`, `lastRevertedAt`, `lastRevertedBy`, `lastRevertReason`) are used identically in Tasks 1, 2, 4, 6, 7. `lastRevertedByName` (the resolved display name) is added by Task 2 and consumed by Task 7 only.
+**Type consistency:** `revertMonthlyBillingReport`'s parameter shape is `{ reportId, reason, userId }` everywhere it appears (Tasks 4 and 5). The AI tool calls the server action rather than threading user id itself. `RevertMonthlyBillingReportActionResult` has the same field set in its definition (Task 5) and consumers (Tasks 6, 8). The new schema column names (`previousZohoInvoiceIds`, `lastRevertedAt`, `lastRevertedBy`, `lastRevertReason`) are used identically in Tasks 1, 2, 4, 6, 7. `lastRevertedByName` (the resolved display name) is added by Task 2 and consumed by Task 7 only.
 
-**One known soft point:** Task 8's Step 5 introduces `userId` into `buildAgent` then notes it's unused and may need to be dropped. Left as a soft instruction with a fallback rather than removed entirely so the implementer has a visible spot to thread session id if future tools need it. If biome/tsc complain, drop the param per the inline note.
+**Concurrency coverage:** Task 4 avoids unsupported `neon-http` transactions and uses a conditional `UPDATE ... RETURNING` instead. Task 5 hardens the existing create-invoice action so invoice creation cannot silently orphan a Zoho invoice if a revert wins the DB race. Task 8 verifies the latest user message contains the literal confirmation phrase, so the model cannot self-confirm a destructive revert.
