@@ -6,17 +6,14 @@ import jwt from "jsonwebtoken";
 import { env } from "@/env";
 
 const TOKEN_TTL_SECONDS = 60 * 30;
-const MEMBRANE_SUBJECT = "3pl-dashboard-app";
 
 const mintMembraneToken = (): string => {
   const now = Math.floor(Date.now() / 1000);
 
   return jwt.sign(
     {
-      // The installed Membrane SDK expects workspace-scoped tokens with
-      // `iss` and tenant/app identity in `id`.
       iss: env.MEMBRANE_WORKSPACE_KEY,
-      id: MEMBRANE_SUBJECT,
+      id: env.MEMBRANE_TENANT_KEY,
       iat: now,
       exp: now + TOKEN_TTL_SECONDS,
     },

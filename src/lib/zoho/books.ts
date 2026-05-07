@@ -46,11 +46,6 @@ type ZohoItemSummary = {
   name: string | null;
 };
 
-type ZohoItemsPage = {
-  items: ZohoItemSummary[];
-  hasMorePage: boolean;
-};
-
 const ZOHO_INVOICES_PATH = "/invoices";
 const ZOHO_ITEMS_PATH = "/items";
 const ITEMS_PER_PAGE = 200;
@@ -167,51 +162,61 @@ const toItemSummary = (value: unknown): ZohoItemSummary | null => {
   };
 };
 
-const listZohoItemsPage = async (page: number): Promise<ZohoItemsPage> => {
-  const proxy = getZohoProxy();
+export { buildZohoInvoiceUrl };
 
-  try {
-    const response = await proxy.get(
-      buildZohoPath(ZOHO_ITEMS_PATH, {
-        page,
-        per_page: ITEMS_PER_PAGE,
-      }),
-    );
+const computeCommonPrefix = (values: string[]): string => {
+  if (values.length === 0) {
+    return "";
+  }
+
+  let prefix = values[0];
+  for (let i = 1; i < values.length && prefix; i += 1) {
+    while (prefix && !values[i].startsWith(prefix)) {
+      prefix = prefix.slice(0, -1);
+    }
+  }
+
+  return prefix;
+};
+
+const listZohoItemsBySkuPrefix = async (
+  prefix: string,
+): Promise<ZohoItemSummary[]> => {
+  const proxy = getZohoProxy();
+  const collected: ZohoItemSummary[] = [];
+
+  for (let page = 1; page <= MAX_ITEM_PAGES; page += 1) {
+    let response: unknown;
+    try {
+      response = await proxy.get(
+        buildZohoPath(ZOHO_ITEMS_PATH, {
+          sku_startswith: prefix,
+          page,
+          per_page: ITEMS_PER_PAGE,
+        }),
+      );
+    } catch (error) {
+      throw new Error(getErrorMessage(error));
+    }
 
     const items =
       isRecord(response) && Array.isArray(response.items)
         ? response.items.map(toItemSummary).filter(isNonNull)
         : [];
 
+    collected.push(...items);
+
     const pageContext =
       isRecord(response) && isRecord(response.page_context)
         ? response.page_context
         : null;
 
-    return {
-      items,
-      hasMorePage: pageContext?.has_more_page === true,
-    };
-  } catch (error) {
-    throw new Error(getErrorMessage(error));
-  }
-};
-
-export { buildZohoInvoiceUrl };
-
-const listAllZohoItems = async (): Promise<ZohoItemSummary[]> => {
-  const items: ZohoItemSummary[] = [];
-
-  for (let page = 1; page <= MAX_ITEM_PAGES; page += 1) {
-    const result = await listZohoItemsPage(page);
-    items.push(...result.items);
-
-    if (!result.hasMorePage) {
+    if (pageContext?.has_more_page !== true) {
       break;
     }
   }
 
-  return items;
+  return collected;
 };
 
 const resolveZohoItemIds = async (
@@ -223,7 +228,15 @@ const resolveZohoItemIds = async (
     }
   >
 > => {
-  const items = await listAllZohoItems();
+  const prefix = computeCommonPrefix(lineItems.map((item) => item.sku));
+
+  if (!prefix) {
+    throw new Error(
+      "Cannot look up Zoho Books items: line item SKUs share no common prefix.",
+    );
+  }
+
+  const items = await listZohoItemsBySkuPrefix(prefix);
 
   return lineItems.map((lineItem) => {
     const match =
