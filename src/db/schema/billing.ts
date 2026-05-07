@@ -17,6 +17,7 @@ import type {
   BillingShipmentMatchStatus,
 } from "@/lib/billing/types";
 
+import { user } from "./auth";
 import { shipstationAccount, shipstationShipment } from "./shipstation";
 
 export const monthlyBillingReport = pgTable(
@@ -65,6 +66,15 @@ export const monthlyBillingReport = pgTable(
       .defaultNow(),
     finalizedAt: timestamp("finalized_at", { withTimezone: true }),
     zohoInvoiceId: text("zoho_invoice_id"),
+    previousZohoInvoiceIds: jsonb("previous_zoho_invoice_ids")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
+    lastRevertedAt: timestamp("last_reverted_at", { withTimezone: true }),
+    lastRevertedBy: text("last_reverted_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    lastRevertReason: text("last_revert_reason"),
   },
   (t) => [
     uniqueIndex("monthly_billing_report_account_period_idx").on(
