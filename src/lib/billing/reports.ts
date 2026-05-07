@@ -11,6 +11,7 @@ import {
   shipstationAccount,
   shipstationShipment,
 } from "@/db/schema/shipstation";
+import { user } from "@/db/schema/auth";
 
 import { getRequiredBillingShipmentTagNames } from "./config";
 import { matchShipmentPackages } from "./dimension-match";
@@ -254,6 +255,11 @@ export type MonthlyBillingReportDetail = {
     generatedAt: Date;
     finalizedAt: Date | null;
     zohoInvoiceId: string | null;
+    previousZohoInvoiceIds: string[];
+    lastRevertedAt: Date | null;
+    lastRevertedBy: string | null;
+    lastRevertedByName: string | null;
+    lastRevertReason: string | null;
   };
   shipments: MonthlyBillingReportDetailRow[];
 };
@@ -592,6 +598,11 @@ export const getMonthlyBillingReport = async ({
       generatedAt: monthlyBillingReport.generatedAt,
       finalizedAt: monthlyBillingReport.finalizedAt,
       zohoInvoiceId: monthlyBillingReport.zohoInvoiceId,
+      previousZohoInvoiceIds: monthlyBillingReport.previousZohoInvoiceIds,
+      lastRevertedAt: monthlyBillingReport.lastRevertedAt,
+      lastRevertedBy: monthlyBillingReport.lastRevertedBy,
+      lastRevertReason: monthlyBillingReport.lastRevertReason,
+      reverterName: user.name,
       account: {
         id: shipstationAccount.id,
         slug: shipstationAccount.slug,
@@ -603,6 +614,7 @@ export const getMonthlyBillingReport = async ({
       shipstationAccount,
       eq(monthlyBillingReport.accountId, shipstationAccount.id),
     )
+    .leftJoin(user, eq(monthlyBillingReport.lastRevertedBy, user.id))
     .where(eq(monthlyBillingReport.id, reportId))
     .limit(1);
 
@@ -660,14 +672,18 @@ export const getMonthlyBillingReport = async ({
   );
   const manualMetrics = getManualMetricsFromRow(reportRow);
 
+  const { reverterName, ...reportRest } = reportRow;
+
   return {
     report: {
-      ...reportRow,
+      ...reportRest,
       status: reportRow.status as BillingReportStatus,
       unitsPickedTotal,
       packagingCostTotal: moneyToNumber(reportRow.packagingCostTotal),
       manualMetrics,
       orderChannelSummary,
+      previousZohoInvoiceIds: reportRow.previousZohoInvoiceIds ?? [],
+      lastRevertedByName: reverterName ?? null,
     },
     shipments,
   };
