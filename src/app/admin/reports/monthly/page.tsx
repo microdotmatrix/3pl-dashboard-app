@@ -1,3 +1,4 @@
+import { formatDistanceToNow } from "date-fns";
 import { desc } from "drizzle-orm";
 
 import { MonthlyReportActions } from "@/components/admin/monthly-report-actions";
@@ -33,6 +34,7 @@ import {
   listMonthlyBillingReports,
 } from "@/lib/billing/reports";
 import type { BillingAccountSlug } from "@/lib/billing/types";
+import { buildZohoInvoiceUrl } from "@/lib/zoho/urls";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -410,6 +412,52 @@ const MonthlyReportsPage = async ({
                     Regenerate after updating the public rate sheet.
                   </AlertDescription>
                 </Alert>
+              ) : null}
+
+              {currentReport.report.lastRevertedAt ||
+              currentReport.report.previousZohoInvoiceIds.length > 0 ? (
+                <div className="rounded-md border border-muted-foreground/20 bg-muted/30 p-3 text-xs text-muted-foreground">
+                  {currentReport.report.lastRevertedAt ? (
+                    <p>
+                      Last reverted{" "}
+                      {formatDistanceToNow(
+                        currentReport.report.lastRevertedAt,
+                        { addSuffix: true },
+                      )}{" "}
+                      by{" "}
+                      <span className="font-medium">
+                        {currentReport.report.lastRevertedByName ??
+                          currentReport.report.lastRevertedBy ??
+                          "unknown user"}
+                      </span>
+                      {currentReport.report.lastRevertReason
+                        ? ` — reason: "${currentReport.report.lastRevertReason}"`
+                        : ""}
+                      .
+                    </p>
+                  ) : null}
+                  {currentReport.report.previousZohoInvoiceIds.length > 0 ? (
+                    <p className="mt-1">
+                      Previous invoices:{" "}
+                      {currentReport.report.previousZohoInvoiceIds.map(
+                        (id, index) => (
+                          <span key={id}>
+                            {index > 0 ? ", " : ""}
+                            <a
+                              href={buildZohoInvoiceUrl(id)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="underline underline-offset-2"
+                            >
+                              {id}
+                            </a>
+                          </span>
+                        ),
+                      )}
+                      .
+                    </p>
+                  ) : null}
+                </div>
               ) : null}
 
               <Table>
