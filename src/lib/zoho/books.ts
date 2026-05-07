@@ -197,6 +197,8 @@ const listZohoItemsPage = async (page: number): Promise<ZohoItemsPage> => {
   }
 };
 
+export { buildZohoInvoiceUrl };
+
 const listAllZohoItems = async (): Promise<ZohoItemSummary[]> => {
   const items: ZohoItemSummary[] = [];
 
@@ -318,4 +320,3 @@ export const getZohoInvoice = async (
     throw new Error(getErrorMessage(error));
   }
 };
-
