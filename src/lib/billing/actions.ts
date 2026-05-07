@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { db } from "@/db";
@@ -13,13 +13,14 @@ import type {
   BillingManualMetrics,
 } from "@/lib/billing/types";
 import { isVendorSlug } from "@/lib/shipments/vendor-colors";
-import { createZohoInvoice } from "@/lib/zoho/books";
+import { createZohoInvoice, voidZohoInvoice } from "@/lib/zoho/books";
 import { buildZohoInvoiceUrl } from "@/lib/zoho/urls";
 
 import {
   finalizeMonthlyBillingReport,
   generateMonthlyBillingReport,
   getMonthlyBillingReport,
+  revertMonthlyBillingReport,
   updateMonthlyBillingReportManualMetrics,
 } from "./reports";
 
@@ -31,6 +32,15 @@ export type MonthlyBillingActionResult = {
 
 export type CreateZohoInvoiceActionResult =
   | { ok: true; invoiceId: string; invoiceUrl: string }
+  | { ok: false; message: string };
+
+export type RevertMonthlyBillingReportActionResult =
+  | {
+      ok: true;
+      message: string;
+      reportId: string;
+      voidedInvoiceId: string | null;
+    }
   | { ok: false; message: string };
 
 const revalidateBillingPages = () => {
@@ -315,10 +325,44 @@ export const createZohoInvoiceAction = async ({
       buildInvoiceParams(detail, slug as BillingAccountSlug),
     );
 
-    await db
+    const [linked] = await db
       .update(monthlyBillingReport)
       .set({ zohoInvoiceId: invoice.invoiceId })
-      .where(eq(monthlyBillingReport.id, reportId));
+      .where(
+        and(
+          eq(monthlyBillingReport.id, reportId),
+          eq(monthlyBillingReport.status, "finalized"),
+          isNull(monthlyBillingReport.zohoInvoiceId),
+        ),
+      )
+      .returning({ id: monthlyBillingReport.id });
+
+    if (!linked) {
+      try {
+        await voidZohoInvoice(invoice.invoiceId);
+      } catch (voidError) {
+        const message =
+          voidError instanceof Error
+            ? voidError.message
+            : "Zoho Books cleanup failed.";
+        console.error("createZohoInvoiceAction: orphan cleanup failed", {
+          reportId,
+          invoiceId: invoice.invoiceId,
+          message,
+        });
+
+        return {
+          ok: false,
+          message: `Invoice ${invoice.invoiceId} was created in Zoho, but the report changed before it could be linked. Void it manually in Zoho. Cleanup error: ${message}`,
+        };
+      }
+
+      return {
+        ok: false,
+        message:
+          "The report changed while creating the invoice. The newly-created Zoho invoice was voided; refresh and try again.",
+      };
+    }
 
     revalidateBillingPages();
 
@@ -334,6 +378,46 @@ export const createZohoInvoiceAction = async ({
         error instanceof Error
           ? error.message
           : "Failed to create Zoho invoice.",
+    };
+  }
+};
+
+export const revertMonthlyBillingReportAction = async ({
+  reportId,
+  reason,
+}: {
+  reportId: string;
+  reason: string;
+}): Promise<RevertMonthlyBillingReportActionResult> => {
+  const session = await requireAdmin();
+
+  try {
+    const detail = await getMonthlyBillingReport({ reportId });
+    const voidedInvoiceId = detail.report.zohoInvoiceId;
+
+    const updated = await revertMonthlyBillingReport({
+      reportId,
+      reason,
+      userId: session.user.id,
+    });
+
+    revalidateBillingPages();
+
+    return {
+      ok: true,
+      message: voidedInvoiceId
+        ? `Report reverted. Invoice ${voidedInvoiceId} voided in Zoho.`
+        : "Report reverted. Metrics are editable again.",
+      reportId: updated.report.id,
+      voidedInvoiceId,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "Failed to revert the monthly billing report.",
     };
   }
 };
