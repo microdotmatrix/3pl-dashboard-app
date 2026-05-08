@@ -6,20 +6,17 @@ export type BillingReportStatus = "draft" | "finalized";
 
 export type BillingShipmentMatchStatus = "matched" | "partial" | "unmatched";
 
-export type BillingSheetColumnMapping = {
-  label: string[];
-  length: string[];
-  width: string[];
-  height: string[];
-  cost: string[];
+export type BillingRateColumnIds = {
+  length: string;
+  width: string;
+  height: string;
+  cost: string;
 };
 
-export type BillingSheetClientConfig = {
+export type BillingRateClientConfig = {
   accountSlug: BillingAccountSlug;
-  spreadsheetId: string | null;
-  sheetGid: string | null;
-  headerRow: number;
-  columns: BillingSheetColumnMapping;
+  boardId: string;
+  columnIds: BillingRateColumnIds;
 };
 
 export type BillingRateRow = {

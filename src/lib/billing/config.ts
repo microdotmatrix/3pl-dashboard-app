@@ -5,16 +5,18 @@ import { isVendorSlug } from "@/lib/shipments/vendor-colors";
 
 import type {
   BillingAccountSlug,
-  BillingSheetClientConfig,
-  BillingSheetColumnMapping,
+  BillingRateClientConfig,
+  BillingRateColumnIds,
 } from "./types";
 
-const COMMON_COLUMNS: BillingSheetColumnMapping = {
-  label: ["carton", "carton name", "package", "package type", "box"],
-  length: ["length", "len", "l"],
-  width: ["width", "wid", "w"],
-  height: ["height", "ht", "h"],
-  cost: ["cost", "carton cost", "packaging cost", "price", "amount"],
+// Stable column IDs from the Monday "Package List" board. The columns are
+// addressed by ID (not header text), so renaming them in the Monday UI is
+// safe; restructuring the board is not.
+const PACKAGE_BOARD_COLUMN_IDS: BillingRateColumnIds = {
+  length: "numeric_mkyarrcw",
+  width: "numeric_mkyae9vp",
+  height: "numeric_mkyaahkv",
+  cost: "numeric_mkyad0ax",
 };
 
 const BILLING_REPORT_REQUIRED_TAGS: Partial<
@@ -23,41 +25,30 @@ const BILLING_REPORT_REQUIRED_TAGS: Partial<
   fatass: ["3PL"],
 };
 
-export const BILLING_SHEET_CONFIG: Record<
-  BillingAccountSlug,
-  BillingSheetClientConfig
-> = {
-  dip: {
-    accountSlug: "dip",
-    spreadsheetId: env.BILLING_RATES_SPREADSHEET_ID ?? null,
-    sheetGid: env.BILLING_RATES_GID ?? null,
-    headerRow: 1,
-    columns: COMMON_COLUMNS,
-  },
-  fatass: {
-    accountSlug: "fatass",
-    spreadsheetId: env.BILLING_RATES_SPREADSHEET_ID ?? null,
-    sheetGid: env.BILLING_RATES_GID ?? null,
-    headerRow: 1,
-    columns: COMMON_COLUMNS,
-  },
-  ryot: {
-    accountSlug: "ryot",
-    spreadsheetId: env.BILLING_RATES_SPREADSHEET_ID ?? null,
-    sheetGid: env.BILLING_RATES_GID ?? null,
-    headerRow: 1,
-    columns: COMMON_COLUMNS,
-  },
+// All three accounts currently share one board; per-account boards can be
+// added by replacing this with per-slug entries.
+const SHARED_BOARD = {
+  boardId: env.MONDAY_PACKAGE_BOARD_ID,
+  columnIds: PACKAGE_BOARD_COLUMN_IDS,
 };
 
-export const getBillingSheetConfig = (
+export const BILLING_RATE_CONFIG: Record<
+  BillingAccountSlug,
+  BillingRateClientConfig
+> = {
+  dip: { accountSlug: "dip", ...SHARED_BOARD },
+  fatass: { accountSlug: "fatass", ...SHARED_BOARD },
+  ryot: { accountSlug: "ryot", ...SHARED_BOARD },
+};
+
+export const getBillingRateConfig = (
   accountSlug: string,
-): BillingSheetClientConfig => {
+): BillingRateClientConfig => {
   if (!isVendorSlug(accountSlug)) {
     throw new Error(`Unsupported billing account slug "${accountSlug}".`);
   }
 
-  return BILLING_SHEET_CONFIG[accountSlug];
+  return BILLING_RATE_CONFIG[accountSlug];
 };
 
 export const getRequiredBillingShipmentTagNames = (
@@ -70,11 +61,10 @@ export const getRequiredBillingShipmentTagNames = (
   return [...(BILLING_REPORT_REQUIRED_TAGS[accountSlug] ?? [])];
 };
 
-export const isBillingSheetConfigured = (accountSlug: string): boolean => {
+export const isBillingRateSourceConfigured = (accountSlug: string): boolean => {
   if (!isVendorSlug(accountSlug)) {
     return false;
   }
 
-  const config = BILLING_SHEET_CONFIG[accountSlug];
-  return Boolean(config.spreadsheetId && config.sheetGid);
+  return Boolean(BILLING_RATE_CONFIG[accountSlug].boardId);
 };

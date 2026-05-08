@@ -43,7 +43,7 @@ type MonthlyReportActionsProps = {
   periodLabel: string;
   canFinalize: boolean;
   unmatchedShipmentCount: number;
-  sheetConfigured: boolean;
+  rateSourceConfigured: boolean;
 };
 
 type AnyResult =
@@ -61,7 +61,7 @@ export const MonthlyReportActions = ({
   periodLabel,
   canFinalize,
   unmatchedShipmentCount,
-  sheetConfigured,
+  rateSourceConfigured,
 }: MonthlyReportActionsProps) => {
   const router = useRouter();
   const [isGenerating, startGenerating] = useTransition();
@@ -208,7 +208,9 @@ export const MonthlyReportActions = ({
         <Button
           type="button"
           disabled={
-            !sheetConfigured || isGenerating || reportStatus === "finalized"
+            !rateSourceConfigured ||
+            isGenerating ||
+            reportStatus === "finalized"
           }
           onClick={handleGenerate}
         >

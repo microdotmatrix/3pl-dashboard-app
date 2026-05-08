@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/table";
 import { db } from "@/db";
 import { shipstationAccount } from "@/db/schema/shipstation";
-import { isBillingSheetConfigured } from "@/lib/billing/config";
+import { isBillingRateSourceConfigured } from "@/lib/billing/config";
 import {
   getMonthlyBillingReportForPeriod,
   listMonthlyBillingReports,
@@ -173,7 +173,9 @@ const MonthlyReportsPage = async ({
     listMonthlyBillingReports({ accountSlug: selectedAccount.slug }),
   ]);
 
-  const sheetConfigured = isBillingSheetConfigured(selectedAccount.slug);
+  const rateSourceConfigured = isBillingRateSourceConfigured(
+    selectedAccount.slug,
+  );
   const canFinalize =
     currentReport !== null && currentReport.report.status === "draft";
 
@@ -237,17 +239,19 @@ const MonthlyReportsPage = async ({
             unmatchedShipmentCount={
               currentReport?.report.unmatchedShipmentCount ?? 0
             }
-            sheetConfigured={sheetConfigured}
+            rateSourceConfigured={rateSourceConfigured}
           />
 
-          {!sheetConfigured ? (
+          {!rateSourceConfigured ? (
             <Alert variant="destructive">
-              <AlertTitle>Billing sheet configuration is incomplete</AlertTitle>
+              <AlertTitle>
+                Billing rate source configuration is incomplete
+              </AlertTitle>
               <AlertDescription>
-                Set <code>BILLING_RATES_SPREADSHEET_ID</code> and the{" "}
-                <code>BILLING_RATES_GID</code> env var for the shared package
-                cost tab before generating drafts for{" "}
-                {selectedAccount.displayName} before generating drafts.
+                Set <code>MONDAY_API_TOKEN</code> and{" "}
+                <code>MONDAY_PACKAGE_BOARD_ID</code> for the shared package list
+                board before generating drafts for {selectedAccount.displayName}
+                .
               </AlertDescription>
             </Alert>
           ) : null}
@@ -397,7 +401,7 @@ const MonthlyReportsPage = async ({
                   <AlertTitle>Exceptions need review</AlertTitle>
                   <AlertDescription>
                     One or more shipments could not be matched to a carton rule.
-                    Regenerate after updating the public rate sheet.
+                    Regenerate after updating the Monday package board.
                   </AlertDescription>
                 </Alert>
               ) : null}

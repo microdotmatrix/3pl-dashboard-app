@@ -17,7 +17,7 @@ import { voidZohoInvoice } from "@/lib/zoho/books";
 
 import { getRequiredBillingShipmentTagNames } from "./config";
 import { matchShipmentPackages } from "./dimension-match";
-import { loadBillingRateSheet } from "./rate-sheet";
+import { loadBillingRateSource } from "./rate-source";
 import type {
   BillingManualMetrics,
   BillingPackageMatch,
@@ -337,9 +337,7 @@ export const generateMonthlyBillingReport = async ({
     );
   }
 
-  const { sheetSourceHash, rateRows } = await loadBillingRateSheet(
-    account.slug,
-  );
+  const { sourceHash, rateRows } = await loadBillingRateSource(account.slug);
   const requiredTagNames = getRequiredBillingShipmentTagNames(account.slug);
 
   const shipments = await db
@@ -415,7 +413,7 @@ export const generateMonthlyBillingReport = async ({
           periodStart,
           periodEnd,
           status: "draft",
-          sheetSourceHash,
+          sheetSourceHash: sourceHash,
           shipmentCount: 0,
           packageCount: 0,
           packagingCostTotal: "0",
@@ -455,7 +453,7 @@ export const generateMonthlyBillingReport = async ({
     .update(monthlyBillingReport)
     .set({
       status: "draft",
-      sheetSourceHash,
+      sheetSourceHash: sourceHash,
       shipmentCount,
       packageCount,
       packagingCostTotal: moneyToStorage(packagingCostTotal),
