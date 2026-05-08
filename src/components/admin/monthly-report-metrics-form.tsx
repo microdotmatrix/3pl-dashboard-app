@@ -283,7 +283,7 @@ export const MonthlyReportMetricsForm = ({
           </div>
           {!isFinalized ? (
             isEditing ? (
-              <div className="flex items-center gap-2">
+              <div className="mx-auto flex items-center gap-2 sm:mx-0">
                 <Button
                   type="submit"
                   form="monthly-report-metrics-form"
@@ -307,7 +307,7 @@ export const MonthlyReportMetricsForm = ({
                 type="button"
                 variant="outline"
                 onClick={() => setIsEditing(true)}
-                className="h-9 animate-pulse-primary px-4 text-sm"
+                className="mx-auto h-9 animate-pulse-primary px-4 text-sm sm:mx-0"
               >
                 Edit
               </Button>

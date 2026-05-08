@@ -11,9 +11,13 @@ import { cn } from "@/lib/utils";
 
 type ShipmentsSearchInputProps = {
   query: string;
+  className?: string;
 };
 
-export const ShipmentsSearchInput = ({ query }: ShipmentsSearchInputProps) => {
+export const ShipmentsSearchInput = ({
+  query,
+  className,
+}: ShipmentsSearchInputProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -69,8 +73,9 @@ export const ShipmentsSearchInput = ({ query }: ShipmentsSearchInputProps) => {
   return (
     <div
       className={cn(
-        "flex h-7 w-full min-w-0 items-center gap-2 rounded-md border border-input bg-input/20 px-2 text-xs shadow-xs transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/50 dark:bg-input/30 sm:w-auto sm:min-w-44 sm:max-w-52",
+        "flex h-7 w-full min-w-0 items-center gap-2 rounded-md border border-input bg-input/20 px-2 text-xs shadow-xs transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/50 dark:bg-input/30",
         isPending && "opacity-80",
+        className,
       )}
     >
       <HugeiconsIcon

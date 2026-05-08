@@ -86,6 +86,14 @@ export const ShipmentRow = ({ row, focusExternalId }: ShipmentRowProps) => {
     if (!focusExternalId) return;
     if (focusExternalId !== row.shipment.externalId) return;
     setHighlighted(true);
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 767px)").matches
+    ) {
+      setSheetOpen(true);
+    } else {
+      setExpanded(true);
+    }
     const t = setTimeout(() => setHighlighted(false), 2500);
     return () => clearTimeout(t);
   }, [focusExternalId, row.shipment.externalId]);

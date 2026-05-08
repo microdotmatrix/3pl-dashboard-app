@@ -207,18 +207,17 @@ export const ShipmentsFilterBar = ({
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-card p-2",
+        "flex flex-col gap-2 rounded-lg border border-border/60 bg-card p-2 xl:flex-row xl:flex-wrap xl:items-center",
         isPending && "opacity-80",
       )}
     >
-      <ShipmentsSearchInput query={query} />
-
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center xl:flex-1">
+        <ShipmentsSearchInput query={query} className="sm:flex-1" />
         <Select value={vendorValue} onValueChange={onVendorChange}>
           <SelectTrigger
             size="default"
             aria-label="Filter by vendor"
-            className="min-w-28"
+            className="w-full sm:w-auto sm:flex-1 sm:min-w-28 xl:flex-initial"
           >
             <SelectValue placeholder="Vendor" />
           </SelectTrigger>
@@ -231,12 +230,14 @@ export const ShipmentsFilterBar = ({
             ))}
           </SelectContent>
         </Select>
+      </div>
 
+      <div className="flex flex-wrap items-center gap-2">
         <Select value={status} onValueChange={onStatusChange}>
           <SelectTrigger
             size="default"
             aria-label="Filter by status"
-            className="min-w-40"
+            className="min-w-0 flex-1 sm:flex-initial sm:min-w-40"
           >
             <SelectValue placeholder="Status" />
           </SelectTrigger>
@@ -313,14 +314,12 @@ export const ShipmentsFilterBar = ({
             </div>
           </PopoverContent>
         </Popover>
-      </div>
 
-      <div className="ml-auto flex items-center gap-2">
         <Select value={sort} onValueChange={onSortChange}>
           <SelectTrigger
             size="default"
             aria-label="Sort shipments"
-            className="min-w-52"
+            className="min-w-0 flex-1 sm:flex-initial sm:min-w-52"
           >
             <SelectValue placeholder="Sort" />
           </SelectTrigger>
@@ -332,6 +331,7 @@ export const ShipmentsFilterBar = ({
             ))}
           </SelectContent>
         </Select>
+
         {hasActiveFilters ? (
           <Button
             type="button"
