@@ -61,6 +61,7 @@ const buildDraftValues = (
   largeBinCount: String(metrics.largeBinCount),
   additionalCartonsCount: String(metrics.additionalCartonsCount),
   cartonsReceivedTotal: String(metrics.cartonsReceivedTotal),
+  palletsReceivedTotal: String(metrics.palletsReceivedTotal),
   retailReturnsTotal: String(metrics.retailReturnsTotal),
   specialProjectHours: String(metrics.specialProjectHours),
 });
@@ -132,6 +133,14 @@ const RECEIVING_AND_PROJECT_METRICS: MetricField[] = [
     format: (value) => numberFormatter.format(value),
   },
   {
+    key: "palletsReceivedTotal",
+    label: "Pallets received",
+    description: "Total pallets received during the month.",
+    inputMode: "numeric",
+    step: "1",
+    format: (value) => numberFormatter.format(value),
+  },
+  {
     key: "retailReturnsTotal",
     label: "Retail returns",
     description: "Total retail returns processed during the month.",
@@ -162,7 +171,7 @@ const METRIC_SECTIONS: MetricSection[] = [
     title: "Receiving & special projects",
     description:
       "Monthly receiving volume, retail returns, and special project labor.",
-    gridClassName: "grid gap-4 md:grid-cols-2 xl:grid-cols-3",
+    gridClassName: "grid gap-4 md:grid-cols-2 xl:grid-cols-4",
     fields: RECEIVING_AND_PROJECT_METRICS,
   },
 ];
@@ -220,6 +229,7 @@ export const MonthlyReportMetricsForm = ({
         largeBinCount: String(currentMetrics.largeBinCount),
         additionalCartonsCount: String(currentMetrics.additionalCartonsCount),
         cartonsReceivedTotal: String(currentMetrics.cartonsReceivedTotal),
+        palletsReceivedTotal: String(currentMetrics.palletsReceivedTotal),
         retailReturnsTotal: String(currentMetrics.retailReturnsTotal),
         specialProjectHours: String(currentMetrics.specialProjectHours),
       });
@@ -231,6 +241,7 @@ export const MonthlyReportMetricsForm = ({
     currentMetrics.largeBinCount,
     currentMetrics.additionalCartonsCount,
     currentMetrics.cartonsReceivedTotal,
+    currentMetrics.palletsReceivedTotal,
     currentMetrics.retailReturnsTotal,
     currentMetrics.specialProjectHours,
   ]);
@@ -494,7 +505,9 @@ export const MonthlyReportMetricsForm = ({
                                   size="icon-xs"
                                   aria-label={`Increase ${metric.label}`}
                                   disabled={isPending}
-                                  onClick={() => adjustDraftValue(metric.key, 1)}
+                                  onClick={() =>
+                                    adjustDraftValue(metric.key, 1)
+                                  }
                                 >
                                   +
                                 </InputGroupButton>
@@ -509,9 +522,7 @@ export const MonthlyReportMetricsForm = ({
                         <FieldDescription>
                           {metric.description}
                         </FieldDescription>
-                        <FieldError>
-                          {fieldError(state, metric.key)}
-                        </FieldError>
+                        <FieldError>{fieldError(state, metric.key)}</FieldError>
                       </Field>
                     );
                   })}

@@ -2,11 +2,8 @@ import "server-only";
 
 import type { MonthlyBillingReportDetail } from "@/lib/billing/reports";
 import type { BillingAccountSlug } from "@/lib/billing/types";
+import type { CreateZohoInvoiceParams, ZohoLineItem } from "@/lib/zoho/books";
 import { getZohoContactIdForSlug } from "@/lib/zoho/contact-map";
-import type {
-  CreateZohoInvoiceParams,
-  ZohoLineItem,
-} from "@/lib/zoho/books";
 
 const LINE_RATES = {
   storageSmall: 1.5,
@@ -44,7 +41,8 @@ const today = (): string => {
 
 const resolveRetailQty = (
   report: MonthlyBillingReportDetail["report"],
-): number => report.orderChannelSummary?.d2cShipmentCount ?? report.shipmentCount;
+): number =>
+  report.orderChannelSummary?.d2cShipmentCount ?? report.shipmentCount;
 
 const resolveWholesaleQty = (
   report: MonthlyBillingReportDetail["report"],
@@ -110,6 +108,11 @@ export const buildInvoiceParams = (
       name: "Receiving – Carton",
       rate: LINE_RATES.receivingCarton,
       quantity: report.manualMetrics.cartonsReceivedTotal,
+    },
+    {
+      sku: "3PL-RECV-PALLET",
+      name: "Receiving – Pallet",
+      quantity: report.manualMetrics.palletsReceivedTotal,
     },
     {
       sku: "3PL-RETURN-RETAIL",

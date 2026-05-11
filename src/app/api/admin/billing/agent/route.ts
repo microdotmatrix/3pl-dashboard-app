@@ -76,6 +76,7 @@ const buildSystemPrompt = (
     `- Storage bins: small ${report.manualMetrics.smallBinCount}, medium ${report.manualMetrics.mediumBinCount}, large ${report.manualMetrics.largeBinCount}`,
     `- Storage cartons: ${report.manualMetrics.additionalCartonsCount}`,
     `- Cartons received: ${numberFmt.format(report.manualMetrics.cartonsReceivedTotal)}`,
+    `- Pallets received: ${numberFmt.format(report.manualMetrics.palletsReceivedTotal)}`,
     `- Retail returns: ${numberFmt.format(report.manualMetrics.retailReturnsTotal)}`,
     `- Special project hours: ${numberFmt.format(report.manualMetrics.specialProjectHours)}`,
   ].join("\n");

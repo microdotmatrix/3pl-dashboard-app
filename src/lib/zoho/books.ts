@@ -9,7 +9,7 @@ export type ZohoLineItem = {
   sku: string;
   name: string;
   description?: string;
-  rate: number;
+  rate?: number;
   quantity: number;
 };
 
@@ -44,12 +44,16 @@ type ZohoItemSummary = {
   itemId: string;
   sku: string | null;
   name: string | null;
+  rate: number | null;
 };
 
 const ZOHO_INVOICES_PATH = "/invoices";
 const ZOHO_ITEMS_PATH = "/items";
 const ITEMS_PER_PAGE = 200;
 const MAX_ITEM_PAGES = 25;
+
+// "Green Box 3PL - 2026 Approved" invoice template in Zoho Books.
+const ZOHO_INVOICE_TEMPLATE_ID = "3195387000197277124";
 
 const getZohoProxy = () =>
   getMembraneClient().connection(env.MEMBRANE_ZOHO_CONNECTION_ID).proxy;
@@ -159,6 +163,7 @@ const toItemSummary = (value: unknown): ZohoItemSummary | null => {
     itemId,
     sku: asString(value.sku),
     name: asString(value.name),
+    rate: asNumber(value.rate),
   };
 };
 
@@ -252,9 +257,17 @@ const resolveZohoItemIds = async (
       );
     }
 
+    const rate = lineItem.rate ?? match.rate;
+    if (typeof rate !== "number") {
+      throw new Error(
+        `Zoho Books item "${lineItem.name}" (${lineItem.sku}) does not have a configured rate.`,
+      );
+    }
+
     return {
       ...lineItem,
       itemId: match.itemId,
+      rate,
     };
   });
 };
@@ -268,6 +281,7 @@ export const createZohoInvoice = async (
   try {
     const response = await proxy.post(ZOHO_INVOICES_PATH, {
       customer_id: params.customerId,
+      template_id: ZOHO_INVOICE_TEMPLATE_ID,
       date: params.date,
       payment_terms: params.paymentTerms ?? 30,
       reference_number: params.reference,

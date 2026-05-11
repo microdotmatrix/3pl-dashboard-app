@@ -1,0 +1,1 @@
+ALTER TABLE "monthly_billing_report" ADD COLUMN "pallets_received_total" integer DEFAULT 0 NOT NULL;

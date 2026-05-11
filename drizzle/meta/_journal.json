@@ -92,6 +92,13 @@
       "when": 1778185590819,
       "tag": "0012_kind_namora",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1778529509203,
+      "tag": "0013_chilly_satana",
+      "breakpoints": true
     }
   ]
 }

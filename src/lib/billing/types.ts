@@ -37,6 +37,7 @@ export type BillingManualMetrics = {
   largeBinCount: number;
   additionalCartonsCount: number;
   cartonsReceivedTotal: number;
+  palletsReceivedTotal: number;
   retailReturnsTotal: number;
   specialProjectHours: number;
 };

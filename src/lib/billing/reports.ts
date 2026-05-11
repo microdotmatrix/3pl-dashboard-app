@@ -272,6 +272,7 @@ const getManualMetricsFromRow = (row: {
   largeBinCount: number | null;
   additionalCartonsCount: number | null;
   cartonsReceivedTotal: number | null;
+  palletsReceivedTotal: number | null;
   retailReturnsTotal: number | null;
   specialProjectHours: string | number | null;
 }): BillingManualMetrics => ({
@@ -280,6 +281,7 @@ const getManualMetricsFromRow = (row: {
   largeBinCount: row.largeBinCount ?? 0,
   additionalCartonsCount: row.additionalCartonsCount ?? 0,
   cartonsReceivedTotal: row.cartonsReceivedTotal ?? 0,
+  palletsReceivedTotal: row.palletsReceivedTotal ?? 0,
   retailReturnsTotal: row.retailReturnsTotal ?? 0,
   specialProjectHours:
     row.specialProjectHours === null
@@ -622,6 +624,7 @@ export const updateMonthlyBillingReportManualMetrics = async ({
       largeBinCount: manualMetrics.largeBinCount,
       additionalCartonsCount: manualMetrics.additionalCartonsCount,
       cartonsReceivedTotal: manualMetrics.cartonsReceivedTotal,
+      palletsReceivedTotal: manualMetrics.palletsReceivedTotal,
       retailReturnsTotal: manualMetrics.retailReturnsTotal,
       specialProjectHours: moneyToStorage(manualMetrics.specialProjectHours),
     })
@@ -695,6 +698,7 @@ export const getMonthlyBillingReport = async ({
       largeBinCount: monthlyBillingReport.largeBinCount,
       additionalCartonsCount: monthlyBillingReport.additionalCartonsCount,
       cartonsReceivedTotal: monthlyBillingReport.cartonsReceivedTotal,
+      palletsReceivedTotal: monthlyBillingReport.palletsReceivedTotal,
       retailReturnsTotal: monthlyBillingReport.retailReturnsTotal,
       specialProjectHours: monthlyBillingReport.specialProjectHours,
       generatedAt: monthlyBillingReport.generatedAt,
@@ -857,6 +861,10 @@ export const exportMonthlyBillingReportCsv = async ({
     [
       "Cartons received total",
       report.report.manualMetrics.cartonsReceivedTotal,
+    ],
+    [
+      "Pallets received total",
+      report.report.manualMetrics.palletsReceivedTotal,
     ],
     ["Retail returns total", report.report.manualMetrics.retailReturnsTotal],
     [

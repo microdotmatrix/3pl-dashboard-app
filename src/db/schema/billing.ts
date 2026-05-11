@@ -54,6 +54,9 @@ export const monthlyBillingReport = pgTable(
     cartonsReceivedTotal: integer("cartons_received_total")
       .notNull()
       .default(0),
+    palletsReceivedTotal: integer("pallets_received_total")
+      .notNull()
+      .default(0),
     retailReturnsTotal: integer("retail_returns_total").notNull().default(0),
     specialProjectHours: numeric("special_project_hours", {
       precision: 12,
