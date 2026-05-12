@@ -1,0 +1,4 @@
+ALTER TABLE "monthly_billing_report" ADD COLUMN "monday_metrics_snapshot" jsonb DEFAULT '{}'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "monthly_billing_report" ADD COLUMN "manual_metrics_overrides" jsonb DEFAULT '{"smallBinCount":false,"mediumBinCount":false,"largeBinCount":false,"additionalCartonsCount":false,"cartonsReceivedTotal":false,"palletsReceivedTotal":false,"retailReturnsTotal":false,"specialProjectHours":false}'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "monthly_billing_report" ADD COLUMN "monday_metrics_fetched_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "monthly_billing_report" ADD COLUMN "monday_metrics_warnings" jsonb DEFAULT '[]'::jsonb NOT NULL;

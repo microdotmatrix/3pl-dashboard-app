@@ -12,6 +12,9 @@ import {
 } from "drizzle-orm/pg-core";
 
 import type {
+  BillingManualMetricsOverrides,
+  BillingMondayMetricsSnapshot,
+  BillingMondayMetricsWarning,
   BillingPackageMatch,
   BillingReportStatus,
   BillingShipmentMatchStatus,
@@ -64,6 +67,30 @@ export const monthlyBillingReport = pgTable(
     })
       .notNull()
       .default("0"),
+    mondayMetricsSnapshot: jsonb("monday_metrics_snapshot")
+      .$type<BillingMondayMetricsSnapshot>()
+      .notNull()
+      .default({}),
+    manualMetricsOverrides: jsonb("manual_metrics_overrides")
+      .$type<BillingManualMetricsOverrides>()
+      .notNull()
+      .default({
+        smallBinCount: false,
+        mediumBinCount: false,
+        largeBinCount: false,
+        additionalCartonsCount: false,
+        cartonsReceivedTotal: false,
+        palletsReceivedTotal: false,
+        retailReturnsTotal: false,
+        specialProjectHours: false,
+      }),
+    mondayMetricsFetchedAt: timestamp("monday_metrics_fetched_at", {
+      withTimezone: true,
+    }),
+    mondayMetricsWarnings: jsonb("monday_metrics_warnings")
+      .$type<BillingMondayMetricsWarning[]>()
+      .notNull()
+      .default([]),
     generatedAt: timestamp("generated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
