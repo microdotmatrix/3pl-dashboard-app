@@ -20,6 +20,7 @@ import {
   finalizeMonthlyBillingReport,
   generateMonthlyBillingReport,
   getMonthlyBillingReport,
+  refreshMondayMetricsForReport,
   revertMonthlyBillingReport,
   updateMonthlyBillingReportManualMetrics,
 } from "./reports";
@@ -197,17 +198,30 @@ export const generateMonthlyBillingReportAction = async ({
   await requireAdmin();
 
   try {
-    const { detail: report } = await generateMonthlyBillingReport({
+    const { detail, mondayPull } = await generateMonthlyBillingReport({
       accountSlug,
       year,
       month,
     });
 
     revalidateBillingPages();
+
+    if (mondayPull.ok) {
+      const warningsNote =
+        mondayPull.warningsCount > 0
+          ? ` ${mondayPull.warningsCount} Monday warning${mondayPull.warningsCount === 1 ? "" : "s"} — review the report.`
+          : "";
+      return {
+        ok: true,
+        message: `Draft report generated for ${detail.report.account.displayName}. Pulled metrics from Monday.${warningsNote}`,
+        reportId: detail.report.id,
+      };
+    }
+
     return {
-      ok: true,
-      message: `Draft report generated for ${report.report.account.displayName}.`,
-      reportId: report.report.id,
+      ok: false,
+      message: `Draft created from ShipStation for ${detail.report.account.displayName}, but Monday is unreachable: ${mondayPull.error}. Open the report to enter metrics manually, or click Refresh from Monday once the connection is restored.`,
+      reportId: detail.report.id,
     };
   } catch (error) {
     return {
@@ -216,6 +230,50 @@ export const generateMonthlyBillingReportAction = async ({
         error instanceof Error
           ? error.message
           : "Failed to generate the monthly billing report.",
+    };
+  }
+};
+
+export type RefreshMondayMetricsActionResult =
+  | {
+      ok: true;
+      message: string;
+      reportId: string;
+      warningsCount: number;
+    }
+  | { ok: false; message: string };
+
+export const refreshMondayMetricsAction = async ({
+  reportId,
+}: {
+  reportId: string;
+}): Promise<RefreshMondayMetricsActionResult> => {
+  await requireAdmin();
+
+  try {
+    const { detail, warningsCount, fetchedAt } =
+      await refreshMondayMetricsForReport({ reportId });
+
+    revalidateBillingPages();
+
+    const warningsNote =
+      warningsCount > 0
+        ? ` ${warningsCount} warning${warningsCount === 1 ? "" : "s"} — review the report.`
+        : "";
+
+    return {
+      ok: true,
+      message: `Refreshed Monday metrics for ${detail.report.account.displayName} at ${fetchedAt.toLocaleTimeString()}.${warningsNote}`,
+      reportId: detail.report.id,
+      warningsCount,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "Failed to refresh Monday metrics.",
     };
   }
 };
