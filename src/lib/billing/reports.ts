@@ -732,6 +732,91 @@ export const updateMonthlyBillingReportManualMetrics = async ({
   return getMonthlyBillingReport({ reportId });
 };
 
+export const refreshMondayMetricsForReport = async ({
+  reportId,
+}: {
+  reportId: string;
+}): Promise<{
+  detail: MonthlyBillingReportDetail;
+  warningsCount: number;
+  fetchedAt: Date;
+}> => {
+  const [row] = await db
+    .select({
+      id: monthlyBillingReport.id,
+      status: monthlyBillingReport.status,
+      periodStart: monthlyBillingReport.periodStart,
+      smallBinCount: monthlyBillingReport.smallBinCount,
+      mediumBinCount: monthlyBillingReport.mediumBinCount,
+      largeBinCount: monthlyBillingReport.largeBinCount,
+      additionalCartonsCount: monthlyBillingReport.additionalCartonsCount,
+      cartonsReceivedTotal: monthlyBillingReport.cartonsReceivedTotal,
+      palletsReceivedTotal: monthlyBillingReport.palletsReceivedTotal,
+      retailReturnsTotal: monthlyBillingReport.retailReturnsTotal,
+      specialProjectHours: monthlyBillingReport.specialProjectHours,
+      manualMetricsOverrides: monthlyBillingReport.manualMetricsOverrides,
+      accountSlug: shipstationAccount.slug,
+    })
+    .from(monthlyBillingReport)
+    .innerJoin(
+      shipstationAccount,
+      eq(monthlyBillingReport.accountId, shipstationAccount.id),
+    )
+    .where(eq(monthlyBillingReport.id, reportId))
+    .limit(1);
+
+  if (!row) {
+    throw new Error("Monthly billing report not found.");
+  }
+
+  if (row.status === "finalized") {
+    throw new Error("Finalized reports cannot refresh Monday metrics.");
+  }
+
+  const year = row.periodStart.getUTCFullYear();
+  const month = row.periodStart.getUTCMonth() + 1;
+
+  const pull = await pullMondayMetricsForPeriod({
+    accountSlug: row.accountSlug as BillingAccountSlug,
+    year,
+    month,
+  });
+
+  const currentMetrics = getManualMetricsFromRow(row);
+  const currentOverrides =
+    (row.manualMetricsOverrides as BillingManualMetricsOverrides) ??
+    EMPTY_OVERRIDES;
+
+  const { nextMetrics } = applySnapshotToMetrics({
+    currentMetrics,
+    currentOverrides,
+    snapshot: pull.snapshot,
+  });
+
+  await db
+    .update(monthlyBillingReport)
+    .set({
+      smallBinCount: nextMetrics.smallBinCount,
+      mediumBinCount: nextMetrics.mediumBinCount,
+      largeBinCount: nextMetrics.largeBinCount,
+      additionalCartonsCount: nextMetrics.additionalCartonsCount,
+      cartonsReceivedTotal: nextMetrics.cartonsReceivedTotal,
+      palletsReceivedTotal: nextMetrics.palletsReceivedTotal,
+      retailReturnsTotal: nextMetrics.retailReturnsTotal,
+      specialProjectHours: moneyToStorage(nextMetrics.specialProjectHours),
+      mondayMetricsSnapshot: pull.snapshot,
+      mondayMetricsFetchedAt: pull.fetchedAt,
+      mondayMetricsWarnings: pull.warnings,
+    })
+    .where(eq(monthlyBillingReport.id, reportId));
+
+  return {
+    detail: await getMonthlyBillingReport({ reportId }),
+    warningsCount: pull.warnings.length,
+    fetchedAt: pull.fetchedAt,
+  };
+};
+
 export const listMonthlyBillingReports = async ({
   accountSlug,
 }: {
