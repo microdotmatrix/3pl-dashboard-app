@@ -236,6 +236,25 @@ const renderFieldBadge = ({
   );
 };
 
+const computeEditHint = ({
+  draftValue,
+  override,
+  snapshotValue,
+}: {
+  draftValue: string;
+  override: boolean;
+  snapshotValue: number | null | undefined;
+}): string | null => {
+  if (!override) return null;
+  if (typeof snapshotValue !== "number" || !Number.isFinite(snapshotValue)) {
+    return null;
+  }
+  const parsed = Number(draftValue);
+  if (!Number.isFinite(parsed)) return null;
+  if (parsed !== snapshotValue) return null;
+  return "Matches Monday — override will clear.";
+};
+
 const FormStatusMessage = ({
   state,
 }: {
@@ -601,6 +620,22 @@ export const MonthlyReportMetricsForm = ({
                               )}
                             </div>
                           </div>
+                          {isEditing
+                            ? (() => {
+                                const hint = computeEditHint({
+                                  draftValue: draftValues[metric.key],
+                                  override:
+                                    manualMetricsOverrides[metric.key],
+                                  snapshotValue:
+                                    mondayMetricsSnapshot[metric.key],
+                                });
+                                return hint ? (
+                                  <p className="px-3 pb-1 text-[11px] text-muted-foreground">
+                                    {hint}
+                                  </p>
+                                ) : null;
+                              })()
+                            : null}
                           <FieldError className="px-3 pb-2">
                             {fieldError(state, metric.key)}
                           </FieldError>
@@ -690,6 +725,22 @@ export const MonthlyReportMetricsForm = ({
                             {metric.format(currentMetrics[metric.key])}
                           </p>
                         )}
+                        {isEditing
+                          ? (() => {
+                              const hint = computeEditHint({
+                                draftValue: draftValues[metric.key],
+                                override:
+                                  manualMetricsOverrides[metric.key],
+                                snapshotValue:
+                                  mondayMetricsSnapshot[metric.key],
+                              });
+                              return hint ? (
+                                <p className="mt-1 text-[11px] text-muted-foreground">
+                                  {hint}
+                                </p>
+                              ) : null;
+                            })()
+                          : null}
                         <FieldDescription>
                           {metric.description}
                         </FieldDescription>
