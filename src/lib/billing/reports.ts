@@ -20,10 +20,14 @@ import { matchShipmentPackages } from "./dimension-match";
 import { loadBillingRateSource } from "./rate-source";
 import type {
   BillingManualMetrics,
+  BillingManualMetricsOverrides,
+  BillingMondayMetricsSnapshot,
+  BillingMondayMetricsWarning,
   BillingPackageMatch,
   BillingReportStatus,
   BillingShipmentMatchStatus,
 } from "./types";
+import { EMPTY_OVERRIDES } from "./types";
 
 const BILLABLE_STATUS = "label_purchased";
 const RYOT_B2B_PREFIX = "B2B";
@@ -249,6 +253,10 @@ export type MonthlyBillingReportDetail = {
     packagingCostTotal: number;
     unmatchedShipmentCount: number;
     manualMetrics: BillingManualMetrics;
+    mondayMetricsSnapshot: BillingMondayMetricsSnapshot;
+    manualMetricsOverrides: BillingManualMetricsOverrides;
+    mondayMetricsFetchedAt: Date | null;
+    mondayMetricsWarnings: BillingMondayMetricsWarning[];
     orderChannelSummary: {
       b2bShipmentCount: number;
       d2cShipmentCount: number;
@@ -701,6 +709,10 @@ export const getMonthlyBillingReport = async ({
       palletsReceivedTotal: monthlyBillingReport.palletsReceivedTotal,
       retailReturnsTotal: monthlyBillingReport.retailReturnsTotal,
       specialProjectHours: monthlyBillingReport.specialProjectHours,
+      mondayMetricsSnapshot: monthlyBillingReport.mondayMetricsSnapshot,
+      manualMetricsOverrides: monthlyBillingReport.manualMetricsOverrides,
+      mondayMetricsFetchedAt: monthlyBillingReport.mondayMetricsFetchedAt,
+      mondayMetricsWarnings: monthlyBillingReport.mondayMetricsWarnings,
       generatedAt: monthlyBillingReport.generatedAt,
       finalizedAt: monthlyBillingReport.finalizedAt,
       zohoInvoiceId: monthlyBillingReport.zohoInvoiceId,
@@ -787,6 +799,15 @@ export const getMonthlyBillingReport = async ({
       unitsPickedTotal,
       packagingCostTotal: moneyToNumber(reportRow.packagingCostTotal),
       manualMetrics,
+      mondayMetricsSnapshot:
+        (reportRow.mondayMetricsSnapshot as BillingMondayMetricsSnapshot) ?? {},
+      manualMetricsOverrides:
+        (reportRow.manualMetricsOverrides as BillingManualMetricsOverrides) ??
+        EMPTY_OVERRIDES,
+      mondayMetricsFetchedAt: reportRow.mondayMetricsFetchedAt ?? null,
+      mondayMetricsWarnings:
+        (reportRow.mondayMetricsWarnings as BillingMondayMetricsWarning[]) ??
+        [],
       orderChannelSummary,
       previousZohoInvoiceIds: reportRow.previousZohoInvoiceIds ?? [],
       lastRevertedByName: reverterName ?? null,
