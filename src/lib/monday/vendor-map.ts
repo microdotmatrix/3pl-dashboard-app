@@ -1,6 +1,5 @@
-import { isVendorSlug } from "@/lib/shipments/vendor-colors";
-
 import type { BillingAccountSlug } from "@/lib/billing/types";
+import { isVendorSlug } from "@/lib/shipments/vendor-colors";
 
 const VENDOR_LABEL: Record<BillingAccountSlug, string> = {
   ryot: "RYOT",

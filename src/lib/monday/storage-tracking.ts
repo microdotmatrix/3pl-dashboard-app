@@ -3,14 +3,13 @@ import "server-only";
 import { z } from "zod";
 
 import { env } from "@/env";
-import { createMondayClient } from "@/lib/monday/client";
-import { getMondayVendorLabel } from "@/lib/monday/vendor-map";
-
 import type {
   BillingAccountSlug,
   BillingManualMetrics,
   BillingMondayMetricsWarning,
 } from "@/lib/billing/types";
+import { createMondayClient } from "@/lib/monday/client";
+import { getMondayVendorLabel } from "@/lib/monday/vendor-map";
 
 const COLUMN_IDS = {
   timeline: "timerange_mm38e8gg",
@@ -232,9 +231,7 @@ export const loadStorageTrackingForPeriod = async ({
 
   const timelineMatches = vendorMatches.filter((item) => {
     if (!item.timeline) return false;
-    return (
-      item.timeline.start < periodEnd && item.timeline.end >= periodStart
-    );
+    return item.timeline.start < periodEnd && item.timeline.end >= periodStart;
   });
 
   const nameMatches =

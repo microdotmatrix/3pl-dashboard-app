@@ -624,8 +624,7 @@ export const MonthlyReportMetricsForm = ({
                             ? (() => {
                                 const hint = computeEditHint({
                                   draftValue: draftValues[metric.key],
-                                  override:
-                                    manualMetricsOverrides[metric.key],
+                                  override: manualMetricsOverrides[metric.key],
                                   snapshotValue:
                                     mondayMetricsSnapshot[metric.key],
                                 });
@@ -729,8 +728,7 @@ export const MonthlyReportMetricsForm = ({
                           ? (() => {
                               const hint = computeEditHint({
                                 draftValue: draftValues[metric.key],
-                                override:
-                                  manualMetricsOverrides[metric.key],
+                                override: manualMetricsOverrides[metric.key],
                                 snapshotValue:
                                   mondayMetricsSnapshot[metric.key],
                               });
