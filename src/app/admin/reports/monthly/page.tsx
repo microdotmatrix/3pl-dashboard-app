@@ -375,6 +375,10 @@ const MonthlyReportsPage = async ({
             reportId={currentReport.report.id}
             reportStatus={currentReport.report.status}
             manualMetrics={currentReport.report.manualMetrics}
+            mondayMetricsSnapshot={currentReport.report.mondayMetricsSnapshot}
+            manualMetricsOverrides={currentReport.report.manualMetricsOverrides}
+            mondayMetricsFetchedAt={currentReport.report.mondayMetricsFetchedAt}
+            mondayMetricsWarnings={currentReport.report.mondayMetricsWarnings}
           />
 
           <Card>

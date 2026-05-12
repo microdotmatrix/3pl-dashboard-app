@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -30,9 +30,15 @@ import {
   INITIAL_MONTHLY_BILLING_METRICS_ACTION_STATE,
   type MonthlyBillingMetricsActionState,
 } from "@/lib/billing/action-state";
-import { saveMonthlyBillingReportManualMetricsAction } from "@/lib/billing/actions";
+import {
+  refreshMondayMetricsAction,
+  saveMonthlyBillingReportManualMetricsAction,
+} from "@/lib/billing/actions";
 import type {
   BillingManualMetrics,
+  BillingManualMetricsOverrides,
+  BillingMondayMetricsSnapshot,
+  BillingMondayMetricsWarning,
   BillingReportStatus,
 } from "@/lib/billing/types";
 
@@ -40,6 +46,10 @@ type MonthlyReportMetricsFormProps = {
   reportId: string;
   reportStatus: BillingReportStatus;
   manualMetrics: BillingManualMetrics;
+  mondayMetricsSnapshot: BillingMondayMetricsSnapshot;
+  manualMetricsOverrides: BillingManualMetricsOverrides;
+  mondayMetricsFetchedAt: Date | null;
+  mondayMetricsWarnings: BillingMondayMetricsWarning[];
 };
 
 type MetricDraftValues = Record<keyof BillingManualMetrics, string>;
@@ -206,6 +216,10 @@ export const MonthlyReportMetricsForm = ({
   reportId,
   reportStatus,
   manualMetrics,
+  mondayMetricsSnapshot,
+  manualMetricsOverrides,
+  mondayMetricsFetchedAt,
+  mondayMetricsWarnings,
 }: MonthlyReportMetricsFormProps) => {
   const [state, formAction, isPending] = useActionState<
     MonthlyBillingMetricsActionState,
@@ -214,6 +228,24 @@ export const MonthlyReportMetricsForm = ({
     saveMonthlyBillingReportManualMetricsAction,
     INITIAL_MONTHLY_BILLING_METRICS_ACTION_STATE,
   );
+  const [isRefreshing, startRefreshTransition] = useTransition();
+  const [refreshResult, setRefreshResult] = useState<
+    | { kind: "idle" }
+    | { kind: "success"; message: string }
+    | { kind: "error"; message: string }
+  >({ kind: "idle" });
+
+  const handleRefresh = () => {
+    startRefreshTransition(async () => {
+      const result = await refreshMondayMetricsAction({ reportId });
+      if (result.ok) {
+        setRefreshResult({ kind: "success", message: result.message });
+      } else {
+        setRefreshResult({ kind: "error", message: result.message });
+      }
+    });
+  };
+
   const currentMetrics = state.manualMetrics ?? manualMetrics;
   const isFinalized = reportStatus === "finalized";
   const [isEditing, setIsEditing] = useState(false);
@@ -291,6 +323,17 @@ export const MonthlyReportMetricsForm = ({
               Save the manual month-end counts that are not derived from
               ShipStation yet.
             </CardDescription>
+            <p className="text-xs text-muted-foreground">
+              {mondayMetricsFetchedAt
+                ? `Last refreshed from Monday: ${new Intl.DateTimeFormat(
+                    "en-US",
+                    {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    },
+                  ).format(mondayMetricsFetchedAt)}`
+                : "Not yet refreshed from Monday."}
+            </p>
           </div>
           {!isFinalized ? (
             isEditing ? (
@@ -314,14 +357,25 @@ export const MonthlyReportMetricsForm = ({
                 </Button>
               </div>
             ) : (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsEditing(true)}
-                className="mx-auto h-9 animate-pulse-primary px-4 text-sm sm:mx-0"
-              >
-                Edit
-              </Button>
+              <div className="mx-auto flex items-center gap-2 sm:mx-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="h-9 px-4 text-sm"
+                >
+                  {isRefreshing ? "Refreshing…" : "Refresh from Monday"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsEditing(true)}
+                  className="h-9 animate-pulse-primary px-4 text-sm"
+                >
+                  Edit
+                </Button>
+              </div>
             )
           ) : null}
         </div>
@@ -333,6 +387,17 @@ export const MonthlyReportMetricsForm = ({
               This report has been finalized, so month-end metrics are now
               read-only.
             </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {refreshResult.kind === "success" ? (
+          <Alert className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+            <AlertDescription>{refreshResult.message}</AlertDescription>
+          </Alert>
+        ) : null}
+        {refreshResult.kind === "error" ? (
+          <Alert variant="destructive">
+            <AlertDescription>{refreshResult.message}</AlertDescription>
           </Alert>
         ) : null}
 
