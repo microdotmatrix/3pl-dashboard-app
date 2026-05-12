@@ -317,6 +317,7 @@ export const saveMonthlyBillingReportManualMetricsAction = async (
       status: "error",
       message: "Missing report id.",
       manualMetrics: previousState.manualMetrics,
+      manualMetricsOverrides: previousState.manualMetricsOverrides,
     };
   }
 
@@ -327,6 +328,7 @@ export const saveMonthlyBillingReportManualMetricsAction = async (
       message: "Fix the highlighted fields and try again.",
       fieldErrors,
       manualMetrics: previousState.manualMetrics,
+      manualMetricsOverrides: previousState.manualMetricsOverrides,
     };
   }
 
@@ -341,6 +343,7 @@ export const saveMonthlyBillingReportManualMetricsAction = async (
       status: "success",
       message: `Saved month-end metrics for ${report.report.account.displayName}.`,
       manualMetrics: report.report.manualMetrics,
+      manualMetricsOverrides: report.report.manualMetricsOverrides,
     };
   } catch (error) {
     return {
@@ -350,6 +353,7 @@ export const saveMonthlyBillingReportManualMetricsAction = async (
           ? error.message
           : "Failed to save the monthly report metrics.",
       manualMetrics: previousState.manualMetrics ?? manualMetrics,
+      manualMetricsOverrides: previousState.manualMetricsOverrides,
     };
   }
 };
