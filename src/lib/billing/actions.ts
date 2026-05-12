@@ -197,7 +197,7 @@ export const generateMonthlyBillingReportAction = async ({
   await requireAdmin();
 
   try {
-    const report = await generateMonthlyBillingReport({
+    const { detail: report } = await generateMonthlyBillingReport({
       accountSlug,
       year,
       month,

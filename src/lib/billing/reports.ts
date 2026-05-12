@@ -17,8 +17,14 @@ import { voidZohoInvoice } from "@/lib/zoho/books";
 
 import { getRequiredBillingShipmentTagNames } from "./config";
 import { matchShipmentPackages } from "./dimension-match";
+import {
+  applySnapshotToMetrics,
+  computeOverridesAgainstSnapshot,
+  pullMondayMetricsForPeriod,
+} from "./monday-metrics";
 import { loadBillingRateSource } from "./rate-source";
 import type {
+  BillingAccountSlug,
   BillingManualMetrics,
   BillingManualMetricsOverrides,
   BillingMondayMetricsSnapshot,
@@ -324,6 +330,13 @@ const buildOrderChannelSummary = ({
   };
 };
 
+export type GenerateMonthlyBillingReportResult = {
+  detail: MonthlyBillingReportDetail;
+  mondayPull:
+    | { ok: true; warningsCount: number; fetchedAt: Date }
+    | { ok: false; error: string };
+};
+
 export const generateMonthlyBillingReport = async ({
   accountSlug,
   year,
@@ -332,7 +345,7 @@ export const generateMonthlyBillingReport = async ({
   accountSlug: string;
   year: number;
   month: number;
-}) => {
+}): Promise<GenerateMonthlyBillingReportResult> => {
   const account = await resolveAccount(accountSlug);
   const { periodStart, periodEnd } = makePeriod(year, month);
   const existing = await findReportByPeriod({
@@ -473,7 +486,85 @@ export const generateMonthlyBillingReport = async ({
     })
     .where(eq(monthlyBillingReport.id, reportId));
 
-  return getMonthlyBillingReport({ reportId });
+  let mondayPull: GenerateMonthlyBillingReportResult["mondayPull"];
+
+  try {
+    const pull = await pullMondayMetricsForPeriod({
+      accountSlug: account.slug as BillingAccountSlug,
+      year,
+      month,
+    });
+
+    const [existingMetricsRow] = await db
+      .select({
+        smallBinCount: monthlyBillingReport.smallBinCount,
+        mediumBinCount: monthlyBillingReport.mediumBinCount,
+        largeBinCount: monthlyBillingReport.largeBinCount,
+        additionalCartonsCount: monthlyBillingReport.additionalCartonsCount,
+        cartonsReceivedTotal: monthlyBillingReport.cartonsReceivedTotal,
+        palletsReceivedTotal: monthlyBillingReport.palletsReceivedTotal,
+        retailReturnsTotal: monthlyBillingReport.retailReturnsTotal,
+        specialProjectHours: monthlyBillingReport.specialProjectHours,
+        manualMetricsOverrides: monthlyBillingReport.manualMetricsOverrides,
+      })
+      .from(monthlyBillingReport)
+      .where(eq(monthlyBillingReport.id, reportId))
+      .limit(1);
+
+    if (!existingMetricsRow) {
+      throw new Error("Report row vanished mid-generation.");
+    }
+
+    const currentMetrics = getManualMetricsFromRow(existingMetricsRow);
+    const currentOverrides =
+      (existingMetricsRow.manualMetricsOverrides as BillingManualMetricsOverrides) ??
+      EMPTY_OVERRIDES;
+
+    const { nextMetrics } = applySnapshotToMetrics({
+      currentMetrics,
+      currentOverrides,
+      snapshot: pull.snapshot,
+    });
+
+    await db
+      .update(monthlyBillingReport)
+      .set({
+        smallBinCount: nextMetrics.smallBinCount,
+        mediumBinCount: nextMetrics.mediumBinCount,
+        largeBinCount: nextMetrics.largeBinCount,
+        additionalCartonsCount: nextMetrics.additionalCartonsCount,
+        cartonsReceivedTotal: nextMetrics.cartonsReceivedTotal,
+        palletsReceivedTotal: nextMetrics.palletsReceivedTotal,
+        retailReturnsTotal: nextMetrics.retailReturnsTotal,
+        specialProjectHours: moneyToStorage(nextMetrics.specialProjectHours),
+        mondayMetricsSnapshot: pull.snapshot,
+        mondayMetricsFetchedAt: pull.fetchedAt,
+        mondayMetricsWarnings: pull.warnings,
+      })
+      .where(eq(monthlyBillingReport.id, reportId));
+
+    mondayPull = {
+      ok: true,
+      warningsCount: pull.warnings.length,
+      fetchedAt: pull.fetchedAt,
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Monday pull failed.";
+    console.error("generateMonthlyBillingReport: Monday pull failed", {
+      reportId,
+      accountSlug: account.slug,
+      year,
+      month,
+      message,
+    });
+    mondayPull = { ok: false, error: message };
+  }
+
+  return {
+    detail: await getMonthlyBillingReport({ reportId }),
+    mondayPull,
+  };
 };
 
 export const finalizeMonthlyBillingReport = async ({
