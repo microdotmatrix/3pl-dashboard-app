@@ -186,6 +186,56 @@ const METRIC_SECTIONS: MetricSection[] = [
   },
 ];
 
+type FieldBadgeKind = "monday" | "overridden" | null;
+
+const computeFieldBadge = ({
+  isEditing,
+  override,
+  snapshotValue,
+}: {
+  isEditing: boolean;
+  override: boolean;
+  snapshotValue: number | null | undefined;
+}): FieldBadgeKind => {
+  if (isEditing) return null;
+  if (override) return "overridden";
+  if (typeof snapshotValue === "number" && Number.isFinite(snapshotValue)) {
+    return "monday";
+  }
+  return null;
+};
+
+const renderFieldBadge = ({
+  kind,
+  snapshotValue,
+  effectiveValue,
+}: {
+  kind: FieldBadgeKind;
+  snapshotValue: number | null | undefined;
+  effectiveValue: number;
+}) => {
+  if (kind === null) return null;
+  if (kind === "monday") {
+    return (
+      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        Monday
+      </span>
+    );
+  }
+  const tooltip =
+    typeof snapshotValue === "number" && Number.isFinite(snapshotValue)
+      ? `Monday currently shows: ${snapshotValue}. You've overridden to ${effectiveValue}.`
+      : "No data in Monday for this field; using manual value.";
+  return (
+    <span
+      className="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400"
+      title={tooltip}
+    >
+      Overridden
+    </span>
+  );
+};
+
 const FormStatusMessage = ({
   state,
 }: {
@@ -409,6 +459,37 @@ export const MonthlyReportMetricsForm = ({
           <input type="hidden" name="reportId" value={reportId} />
           <FormStatusMessage state={state} />
 
+          {mondayMetricsWarnings.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              {mondayMetricsWarnings
+                .slice()
+                .sort((a, b) => {
+                  const rank = (w: BillingMondayMetricsWarning) =>
+                    w.board === "connection"
+                      ? 0
+                      : w.severity === "error"
+                        ? 1
+                        : 2;
+                  return rank(a) - rank(b);
+                })
+                .map((warning, index) => (
+                  <Alert
+                    key={`${warning.board}-${index}`}
+                    variant={
+                      warning.severity === "error" ? "destructive" : "default"
+                    }
+                    className={
+                      warning.severity === "warning"
+                        ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                        : undefined
+                    }
+                  >
+                    <AlertDescription>{warning.message}</AlertDescription>
+                  </Alert>
+                ))}
+            </div>
+          ) : null}
+
           <FieldGroup>
             {METRIC_SECTIONS.map((section) => (
               <FieldSet
@@ -448,7 +529,21 @@ export const MonthlyReportMetricsForm = ({
                             <div className="flex items-center justify-center bg-muted/40 font-heading text-3xl font-bold tracking-wider text-muted-foreground">
                               {metric.abbreviation}
                             </div>
-                            <div className="flex items-center justify-center px-3 py-4">
+                            <div className="relative flex items-center justify-center px-3 py-4">
+                              <div className="absolute right-2 top-1">
+                                {renderFieldBadge({
+                                  kind: computeFieldBadge({
+                                    isEditing,
+                                    override:
+                                      manualMetricsOverrides[metric.key],
+                                    snapshotValue:
+                                      mondayMetricsSnapshot[metric.key],
+                                  }),
+                                  snapshotValue:
+                                    mondayMetricsSnapshot[metric.key],
+                                  effectiveValue: currentMetrics[metric.key],
+                                })}
+                              </div>
                               {isEditing ? (
                                 <InputGroup>
                                   <InputGroupAddon align="inline-start">
@@ -518,7 +613,18 @@ export const MonthlyReportMetricsForm = ({
                         key={metric.key}
                         className="rounded-md border border-border/60 bg-background/80 p-3"
                       >
-                        <FieldTitle>{metric.label}</FieldTitle>
+                        <div className="flex items-center justify-between gap-2">
+                          <FieldTitle>{metric.label}</FieldTitle>
+                          {renderFieldBadge({
+                            kind: computeFieldBadge({
+                              isEditing,
+                              override: manualMetricsOverrides[metric.key],
+                              snapshotValue: mondayMetricsSnapshot[metric.key],
+                            }),
+                            snapshotValue: mondayMetricsSnapshot[metric.key],
+                            effectiveValue: currentMetrics[metric.key],
+                          })}
+                        </div>
                         <input
                           type="hidden"
                           name={metric.key}
