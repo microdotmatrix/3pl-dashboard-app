@@ -71,3 +71,39 @@ export type BillingShipmentEvaluation = {
   packageMatches: BillingPackageMatch[];
   unmatchedPackageCount: number;
 };
+
+export type BillingMetricKey = keyof BillingManualMetrics;
+
+export type BillingManualMetricsOverrides = Record<BillingMetricKey, boolean>;
+
+export type BillingMondayMetricsSnapshot = Partial<
+  Record<BillingMetricKey, number | null>
+>;
+
+export type BillingMondayMetricsWarning = {
+  board: "storage-tracking" | "receiving" | "special-projects" | "connection";
+  severity: "warning" | "error";
+  message: string;
+};
+
+export const ALL_METRIC_KEYS: readonly BillingMetricKey[] = [
+  "smallBinCount",
+  "mediumBinCount",
+  "largeBinCount",
+  "additionalCartonsCount",
+  "cartonsReceivedTotal",
+  "palletsReceivedTotal",
+  "retailReturnsTotal",
+  "specialProjectHours",
+] as const;
+
+export const EMPTY_OVERRIDES: BillingManualMetricsOverrides = {
+  smallBinCount: false,
+  mediumBinCount: false,
+  largeBinCount: false,
+  additionalCartonsCount: false,
+  cartonsReceivedTotal: false,
+  palletsReceivedTotal: false,
+  retailReturnsTotal: false,
+  specialProjectHours: false,
+};
