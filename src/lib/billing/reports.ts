@@ -702,6 +702,7 @@ export const updateMonthlyBillingReportManualMetrics = async ({
     .select({
       id: monthlyBillingReport.id,
       status: monthlyBillingReport.status,
+      mondayMetricsSnapshot: monthlyBillingReport.mondayMetricsSnapshot,
     })
     .from(monthlyBillingReport)
     .where(eq(monthlyBillingReport.id, reportId))
@@ -715,6 +716,14 @@ export const updateMonthlyBillingReportManualMetrics = async ({
     throw new Error("Finalized reports cannot be edited.");
   }
 
+  const snapshot =
+    (reportRow.mondayMetricsSnapshot as BillingMondayMetricsSnapshot) ?? {};
+
+  const nextOverrides = computeOverridesAgainstSnapshot({
+    submittedMetrics: manualMetrics,
+    snapshot,
+  });
+
   await db
     .update(monthlyBillingReport)
     .set({
@@ -726,6 +735,7 @@ export const updateMonthlyBillingReportManualMetrics = async ({
       palletsReceivedTotal: manualMetrics.palletsReceivedTotal,
       retailReturnsTotal: manualMetrics.retailReturnsTotal,
       specialProjectHours: moneyToStorage(manualMetrics.specialProjectHours),
+      manualMetricsOverrides: nextOverrides,
     })
     .where(eq(monthlyBillingReport.id, reportId));
 
