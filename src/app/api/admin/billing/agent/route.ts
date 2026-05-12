@@ -12,6 +12,7 @@ import { env } from "@/env";
 import { requireAdmin } from "@/lib/auth/access";
 import {
   createZohoInvoiceAction,
+  refreshMondayMetricsAction,
   revertMonthlyBillingReportAction,
 } from "@/lib/billing/actions";
 import { getMonthlyBillingReport } from "@/lib/billing/reports";
@@ -59,6 +60,7 @@ const buildSystemPrompt = (
     "- Refuse to create an invoice if the report is not finalized.",
     "- Be direct and operational. No filler, no apologies.",
     "- Use tools to read live data; never invent invoice IDs or totals.",
+    "- You can refresh the Monday-sourced metrics for a draft report by calling refreshMondayMetrics. This pulls the latest values from Monday and applies them to any field the operator has not manually overridden. Do not call it on finalized reports.",
     "",
     "Revert protocol:",
     "- When a user asks to revert a finalized report, you MUST: (1) state which invoice will be voided in Zoho and which vendor/period the report is for; (2) ask the user to provide a written reason and to reply with the exact phrase CONFIRM REVERT; (3) only then call the revertMonthlyBillingReport tool with both fields.",
@@ -201,6 +203,22 @@ const buildAgent = ({
             ok: true,
             message: result.message,
             voidedInvoiceId: result.voidedInvoiceId,
+          };
+        },
+      }),
+      refreshMondayMetrics: tool({
+        description:
+          "Pull the latest storage bin counts, receiving counts, and special project hours from Monday.com for the current draft report. Applies values only to fields the operator has not manually overridden. No-op on finalized reports.",
+        inputSchema: z.object({}),
+        execute: async () => {
+          const result = await refreshMondayMetricsAction({ reportId });
+          if (!result.ok) {
+            return { ok: false, message: result.message };
+          }
+          return {
+            ok: true,
+            message: result.message,
+            warningsCount: result.warningsCount,
           };
         },
       }),
