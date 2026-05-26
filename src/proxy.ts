@@ -31,13 +31,8 @@ export const proxy = (request: NextRequest) => {
     return NextResponse.redirect(url);
   }
 
-  if (isAuthPage(pathname)) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    url.search = "";
-    return NextResponse.redirect(url);
-  }
-
+  // Let the auth layout do the secure session check for auth pages. A stale
+  // cookie can survive even when the underlying session is gone.
   return NextResponse.next();
 };
 
