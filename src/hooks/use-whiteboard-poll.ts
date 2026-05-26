@@ -31,6 +31,14 @@ export const useWhiteboardPoll = ({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
+  useEffect(() => {
+    setNotesState(initialNotes);
+  }, [initialNotes]);
+
+  useEffect(() => {
+    setUnreadCount(initialUnreadCount);
+  }, [initialUnreadCount]);
+
   const refresh = useCallback(async () => {
     abortRef.current?.abort();
     const ctrl = new AbortController();

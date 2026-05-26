@@ -1,0 +1,26 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - link "3PL Dashboard" [ref=e4] [cursor=pointer]:
+      - /url: /
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - generic [ref=e7]: Sign in
+        - generic [ref=e8]: Use your email and password to continue.
+      - generic [ref=e10]:
+        - generic [ref=e11]:
+          - group [ref=e12]:
+            - generic [ref=e13]: Email
+            - textbox "Email" [ref=e14]
+          - group [ref=e15]:
+            - generic [ref=e16]:
+              - generic [ref=e17]: Password
+              - link "Forgot?" [ref=e18] [cursor=pointer]:
+                - /url: /forgot-password
+            - textbox "Password Forgot?" [ref=e19]
+        - button "Sign in" [ref=e20]
+        - paragraph [ref=e21]:
+          - text: Don't have an account?
+          - link "Create one" [ref=e22] [cursor=pointer]:
+            - /url: /sign-up
+  - button
+  - region "Notifications alt+T"

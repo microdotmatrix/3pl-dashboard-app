@@ -1,7 +1,7 @@
 "use server";
 
 import { eq, inArray } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { refresh, revalidatePath } from "next/cache";
 
 import { db } from "@/db";
 import {
@@ -107,6 +107,7 @@ export const deleteNote = async (noteId: string) => {
   await db.delete(whiteboardNote).where(eq(whiteboardNote.id, noteId));
 
   revalidatePath("/");
+  refresh();
   return { ok: true as const };
 };
 

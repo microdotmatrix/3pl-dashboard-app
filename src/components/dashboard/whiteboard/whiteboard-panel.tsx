@@ -33,11 +33,27 @@ export const WhiteboardPanel = ({
   const searchParams = useSearchParams();
   const markedRef = useRef(false);
 
-  const { notes, unreadCount, isRefreshing, refresh, setUnreadCount } =
-    useWhiteboardPoll({
-      initialNotes,
-      initialUnreadCount,
-    });
+  const {
+    notes,
+    unreadCount,
+    isRefreshing,
+    refresh,
+    setNotes,
+    setUnreadCount,
+  } = useWhiteboardPoll({
+    initialNotes,
+    initialUnreadCount,
+  });
+
+  const handleNoteDeleted = useCallback(
+    async (noteId: string) => {
+      setNotes((currentNotes) =>
+        currentNotes.filter((note) => note.id !== noteId),
+      );
+      await refresh();
+    },
+    [refresh, setNotes],
+  );
 
   const markRead = useCallback(async () => {
     if (markedRef.current) return;
@@ -152,6 +168,7 @@ export const WhiteboardPanel = ({
                 currentUserId={currentUserId}
                 isAdmin={isAdmin}
                 onFocusShipment={focusShipment}
+                onDeleteNote={handleNoteDeleted}
               />
             ))}
           </div>
@@ -171,6 +188,7 @@ export const WhiteboardPanel = ({
                 currentUserId={currentUserId}
                 isAdmin={isAdmin}
                 onFocusShipment={focusShipment}
+                onDeleteNote={handleNoteDeleted}
               />
             ))}
           </div>

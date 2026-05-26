@@ -43,6 +43,7 @@ type NoteCardProps = {
   currentUserId: string;
   isAdmin: boolean;
   onFocusShipment: (externalId: string) => void;
+  onDeleteNote: (noteId: string) => Promise<void>;
 };
 
 const initials = (name: string, email: string): string => {
@@ -58,6 +59,7 @@ export const NoteCard = ({
   currentUserId,
   isAdmin,
   onFocusShipment,
+  onDeleteNote,
 }: NoteCardProps) => {
   const [isPending, startTransition] = useTransition();
 
@@ -88,6 +90,7 @@ export const NoteCard = ({
         return null;
       });
       if (result?.ok) {
+        await onDeleteNote(note.id);
         toast.success("Note deleted");
       } else if (result && "reason" in result) {
         toast.error(
