@@ -55,10 +55,10 @@ const MAX_ITEM_PAGES = 25;
 // "Green Box 3PL - 2026 Approved" invoice template in Zoho Books.
 const ZOHO_INVOICE_TEMPLATE_ID = "3195387000197277124";
 
-const getZohoProxy = () =>
+export const getZohoProxy = () =>
   getMembraneClient().connection(env.MEMBRANE_ZOHO_CONNECTION_ID).proxy;
 
-const buildZohoPath = (
+export const buildZohoPath = (
   path: string,
   query: Record<string, number | string | null | undefined> = {},
 ): string => {
@@ -97,7 +97,7 @@ const asNumber = (value: unknown): number | null => {
 
 const isNonNull = <T>(value: T | null): value is T => value !== null;
 
-const getErrorMessage = (error: unknown): string => {
+export const getErrorMessage = (error: unknown): string => {
   if (isRecord(error)) {
     const data = isRecord(error.data) ? error.data : null;
     const nested = asString(data?.message);
