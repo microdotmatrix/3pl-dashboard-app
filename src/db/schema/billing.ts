@@ -67,6 +67,9 @@ export const monthlyBillingReport = pgTable(
     })
       .notNull()
       .default("0"),
+    specialUseCaseOrdersCount: integer("special_use_case_orders_count")
+      .notNull()
+      .default(0),
     mondayMetricsSnapshot: jsonb("monday_metrics_snapshot")
       .$type<BillingMondayMetricsSnapshot>()
       .notNull()
@@ -83,6 +86,7 @@ export const monthlyBillingReport = pgTable(
         palletsReceivedTotal: false,
         retailReturnsTotal: false,
         specialProjectHours: false,
+        specialUseCaseOrdersCount: false,
       }),
     mondayMetricsFetchedAt: timestamp("monday_metrics_fetched_at", {
       withTimezone: true,

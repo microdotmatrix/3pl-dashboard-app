@@ -74,6 +74,7 @@ const buildDraftValues = (
   palletsReceivedTotal: String(metrics.palletsReceivedTotal),
   retailReturnsTotal: String(metrics.retailReturnsTotal),
   specialProjectHours: String(metrics.specialProjectHours),
+  specialUseCaseOrdersCount: String(metrics.specialUseCaseOrdersCount),
 });
 
 type MetricField = {
@@ -333,6 +334,9 @@ export const MonthlyReportMetricsForm = ({
         palletsReceivedTotal: String(currentMetrics.palletsReceivedTotal),
         retailReturnsTotal: String(currentMetrics.retailReturnsTotal),
         specialProjectHours: String(currentMetrics.specialProjectHours),
+        specialUseCaseOrdersCount: String(
+          currentMetrics.specialUseCaseOrdersCount,
+        ),
       });
     }
   }, [
@@ -345,6 +349,7 @@ export const MonthlyReportMetricsForm = ({
     currentMetrics.palletsReceivedTotal,
     currentMetrics.retailReturnsTotal,
     currentMetrics.specialProjectHours,
+    currentMetrics.specialUseCaseOrdersCount,
   ]);
 
   useEffect(() => {

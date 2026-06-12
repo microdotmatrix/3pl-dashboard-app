@@ -289,6 +289,7 @@ const getManualMetricsFromRow = (row: {
   palletsReceivedTotal: number | null;
   retailReturnsTotal: number | null;
   specialProjectHours: string | number | null;
+  specialUseCaseOrdersCount: number | null;
 }): BillingManualMetrics => ({
   smallBinCount: row.smallBinCount ?? 0,
   mediumBinCount: row.mediumBinCount ?? 0,
@@ -303,6 +304,7 @@ const getManualMetricsFromRow = (row: {
       : typeof row.specialProjectHours === "number"
         ? row.specialProjectHours
         : moneyToNumber(row.specialProjectHours),
+  specialUseCaseOrdersCount: row.specialUseCaseOrdersCount ?? 0,
 });
 
 const hasRyotB2bShipmentPrefix = (shipmentNumber: string | null) =>
@@ -505,6 +507,8 @@ export const generateMonthlyBillingReport = async ({
         palletsReceivedTotal: monthlyBillingReport.palletsReceivedTotal,
         retailReturnsTotal: monthlyBillingReport.retailReturnsTotal,
         specialProjectHours: monthlyBillingReport.specialProjectHours,
+        specialUseCaseOrdersCount:
+          monthlyBillingReport.specialUseCaseOrdersCount,
         manualMetricsOverrides: monthlyBillingReport.manualMetricsOverrides,
       })
       .from(monthlyBillingReport)
@@ -537,6 +541,7 @@ export const generateMonthlyBillingReport = async ({
         palletsReceivedTotal: nextMetrics.palletsReceivedTotal,
         retailReturnsTotal: nextMetrics.retailReturnsTotal,
         specialProjectHours: moneyToStorage(nextMetrics.specialProjectHours),
+        specialUseCaseOrdersCount: nextMetrics.specialUseCaseOrdersCount,
         mondayMetricsSnapshot: pull.snapshot,
         mondayMetricsFetchedAt: pull.fetchedAt,
         mondayMetricsWarnings: pull.warnings,
@@ -735,6 +740,7 @@ export const updateMonthlyBillingReportManualMetrics = async ({
       palletsReceivedTotal: manualMetrics.palletsReceivedTotal,
       retailReturnsTotal: manualMetrics.retailReturnsTotal,
       specialProjectHours: moneyToStorage(manualMetrics.specialProjectHours),
+      specialUseCaseOrdersCount: manualMetrics.specialUseCaseOrdersCount,
       manualMetricsOverrides: nextOverrides,
     })
     .where(eq(monthlyBillingReport.id, reportId));
@@ -764,6 +770,7 @@ export const refreshMondayMetricsForReport = async ({
       palletsReceivedTotal: monthlyBillingReport.palletsReceivedTotal,
       retailReturnsTotal: monthlyBillingReport.retailReturnsTotal,
       specialProjectHours: monthlyBillingReport.specialProjectHours,
+      specialUseCaseOrdersCount: monthlyBillingReport.specialUseCaseOrdersCount,
       manualMetricsOverrides: monthlyBillingReport.manualMetricsOverrides,
       accountSlug: shipstationAccount.slug,
     })
@@ -814,6 +821,7 @@ export const refreshMondayMetricsForReport = async ({
       palletsReceivedTotal: nextMetrics.palletsReceivedTotal,
       retailReturnsTotal: nextMetrics.retailReturnsTotal,
       specialProjectHours: moneyToStorage(nextMetrics.specialProjectHours),
+      specialUseCaseOrdersCount: nextMetrics.specialUseCaseOrdersCount,
       mondayMetricsSnapshot: pull.snapshot,
       mondayMetricsFetchedAt: pull.fetchedAt,
       mondayMetricsWarnings: pull.warnings,
@@ -895,6 +903,7 @@ export const getMonthlyBillingReport = async ({
       palletsReceivedTotal: monthlyBillingReport.palletsReceivedTotal,
       retailReturnsTotal: monthlyBillingReport.retailReturnsTotal,
       specialProjectHours: monthlyBillingReport.specialProjectHours,
+      specialUseCaseOrdersCount: monthlyBillingReport.specialUseCaseOrdersCount,
       mondayMetricsSnapshot: monthlyBillingReport.mondayMetricsSnapshot,
       manualMetricsOverrides: monthlyBillingReport.manualMetricsOverrides,
       mondayMetricsFetchedAt: monthlyBillingReport.mondayMetricsFetchedAt,

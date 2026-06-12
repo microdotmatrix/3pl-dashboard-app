@@ -1,0 +1,2 @@
+ALTER TABLE "monthly_billing_report" ALTER COLUMN "manual_metrics_overrides" SET DEFAULT '{"smallBinCount":false,"mediumBinCount":false,"largeBinCount":false,"additionalCartonsCount":false,"cartonsReceivedTotal":false,"palletsReceivedTotal":false,"retailReturnsTotal":false,"specialProjectHours":false,"specialUseCaseOrdersCount":false}'::jsonb;--> statement-breakpoint
+ALTER TABLE "monthly_billing_report" ADD COLUMN "special_use_case_orders_count" integer DEFAULT 0 NOT NULL;

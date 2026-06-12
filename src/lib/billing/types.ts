@@ -40,6 +40,7 @@ export type BillingManualMetrics = {
   palletsReceivedTotal: number;
   retailReturnsTotal: number;
   specialProjectHours: number;
+  specialUseCaseOrdersCount: number;
 };
 
 export type BillingPackageMatch = {
@@ -81,7 +82,12 @@ export type BillingMondayMetricsSnapshot = Partial<
 >;
 
 export type BillingMondayMetricsWarning = {
-  board: "storage-tracking" | "receiving" | "special-projects" | "connection";
+  board:
+    | "storage-tracking"
+    | "receiving"
+    | "special-projects"
+    | "zoho-sales-orders"
+    | "connection";
   severity: "warning" | "error";
   message: string;
 };
@@ -95,6 +101,7 @@ export const ALL_METRIC_KEYS: readonly BillingMetricKey[] = [
   "palletsReceivedTotal",
   "retailReturnsTotal",
   "specialProjectHours",
+  "specialUseCaseOrdersCount",
 ] as const;
 
 export const EMPTY_OVERRIDES: BillingManualMetricsOverrides = {
@@ -106,4 +113,5 @@ export const EMPTY_OVERRIDES: BillingManualMetricsOverrides = {
   palletsReceivedTotal: false,
   retailReturnsTotal: false,
   specialProjectHours: false,
+  specialUseCaseOrdersCount: false,
 };

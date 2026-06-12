@@ -157,6 +157,12 @@ const getManualMetricsFromFormData = (
     fieldErrors,
   );
   const specialProjectHours = parseSpecialProjectHours(formData, fieldErrors);
+  const specialUseCaseOrdersCount = parseIntegerField(
+    formData,
+    "specialUseCaseOrdersCount",
+    "Special use case orders",
+    fieldErrors,
+  );
 
   if (
     smallBinCount === null ||
@@ -166,7 +172,8 @@ const getManualMetricsFromFormData = (
     cartonsReceivedTotal === null ||
     palletsReceivedTotal === null ||
     retailReturnsTotal === null ||
-    specialProjectHours === null
+    specialProjectHours === null ||
+    specialUseCaseOrdersCount === null
   ) {
     return { manualMetrics: null, fieldErrors };
   }
@@ -181,6 +188,7 @@ const getManualMetricsFromFormData = (
       palletsReceivedTotal,
       retailReturnsTotal,
       specialProjectHours,
+      specialUseCaseOrdersCount,
     },
     fieldErrors,
   };
