@@ -374,6 +374,7 @@ const MonthlyReportsPage = async ({
           <MonthlyReportMetricsForm
             reportId={currentReport.report.id}
             reportStatus={currentReport.report.status}
+            accountSlug={selectedAccount.slug}
             manualMetrics={currentReport.report.manualMetrics}
             mondayMetricsSnapshot={currentReport.report.mondayMetricsSnapshot}
             manualMetricsOverrides={currentReport.report.manualMetricsOverrides}

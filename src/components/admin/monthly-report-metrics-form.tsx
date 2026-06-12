@@ -45,6 +45,7 @@ import type {
 type MonthlyReportMetricsFormProps = {
   reportId: string;
   reportStatus: BillingReportStatus;
+  accountSlug: string;
   manualMetrics: BillingManualMetrics;
   mondayMetricsSnapshot: BillingMondayMetricsSnapshot;
   manualMetricsOverrides: BillingManualMetricsOverrides;
@@ -85,6 +86,7 @@ type MetricField = {
   inputMode: React.HTMLAttributes<HTMLInputElement>["inputMode"];
   step: string;
   format: (value: number) => string;
+  sourceLabel?: "Monday" | "Zoho";
 };
 
 type MetricSection = {
@@ -187,6 +189,36 @@ const METRIC_SECTIONS: MetricSection[] = [
   },
 ];
 
+const SPECIAL_USE_CASE_METRICS: MetricField[] = [
+  {
+    key: "specialUseCaseOrdersCount",
+    label: "Special use case orders",
+    description:
+      "Sales orders marked 'Contains 3PL SKUs' — combined 3PL + drop-ship shipments. Pulled from Zoho Books.",
+    inputMode: "numeric",
+    step: "1",
+    format: (value) => numberFormatter.format(value),
+    sourceLabel: "Zoho",
+  },
+];
+
+const FATASS_ACCOUNT_SLUG = "fatass";
+
+const buildMetricSections = (accountSlug: string): MetricSection[] => [
+  ...METRIC_SECTIONS,
+  ...(accountSlug === FATASS_ACCOUNT_SLUG
+    ? [
+        {
+          title: "Special handling",
+          description:
+            "Combined-shipment sales orders pulled from Zoho Books custom fields.",
+          gridClassName: "grid gap-4 md:grid-cols-2 xl:grid-cols-4",
+          fields: SPECIAL_USE_CASE_METRICS,
+        },
+      ]
+    : []),
+];
+
 type FieldBadgeKind = "monday" | "overridden" | null;
 
 const computeFieldBadge = ({
@@ -210,23 +242,25 @@ const renderFieldBadge = ({
   kind,
   snapshotValue,
   effectiveValue,
+  sourceLabel,
 }: {
   kind: FieldBadgeKind;
   snapshotValue: number | null | undefined;
   effectiveValue: number;
+  sourceLabel: "Monday" | "Zoho";
 }) => {
   if (kind === null) return null;
   if (kind === "monday") {
     return (
       <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-        Monday
+        {sourceLabel}
       </span>
     );
   }
   const tooltip =
     typeof snapshotValue === "number" && Number.isFinite(snapshotValue)
-      ? `Monday currently shows: ${snapshotValue}. You've overridden to ${effectiveValue}.`
-      : "No data in Monday for this field; using manual value.";
+      ? `${sourceLabel} currently shows: ${snapshotValue}. You've overridden to ${effectiveValue}.`
+      : `No data in ${sourceLabel} for this field; using manual value.`;
   return (
     <span
       className="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400"
@@ -241,10 +275,12 @@ const computeEditHint = ({
   draftValue,
   override,
   snapshotValue,
+  sourceLabel,
 }: {
   draftValue: string;
   override: boolean;
   snapshotValue: number | null | undefined;
+  sourceLabel: "Monday" | "Zoho";
 }): string | null => {
   if (!override) return null;
   if (typeof snapshotValue !== "number" || !Number.isFinite(snapshotValue)) {
@@ -253,7 +289,7 @@ const computeEditHint = ({
   const parsed = Number(draftValue);
   if (!Number.isFinite(parsed)) return null;
   if (parsed !== snapshotValue) return null;
-  return "Matches Monday — override will clear.";
+  return `Matches ${sourceLabel} — override will clear.`;
 };
 
 const FormStatusMessage = ({
@@ -285,6 +321,7 @@ const FormStatusMessage = ({
 export const MonthlyReportMetricsForm = ({
   reportId,
   reportStatus,
+  accountSlug,
   manualMetrics,
   mondayMetricsSnapshot,
   manualMetricsOverrides,
@@ -386,6 +423,8 @@ export const MonthlyReportMetricsForm = ({
     setDraftValues(buildDraftValues(currentMetrics));
     setIsEditing(false);
   };
+
+  const metricSections = buildMetricSections(accountSlug);
 
   return (
     <Card>
@@ -515,7 +554,7 @@ export const MonthlyReportMetricsForm = ({
           ) : null}
 
           <FieldGroup>
-            {METRIC_SECTIONS.map((section) => (
+            {metricSections.map((section) => (
               <FieldSet
                 key={section.title}
                 className="rounded-lg border border-border/60 bg-muted/20 p-4"
@@ -566,6 +605,7 @@ export const MonthlyReportMetricsForm = ({
                                   snapshotValue:
                                     mondayMetricsSnapshot[metric.key],
                                   effectiveValue: currentMetrics[metric.key],
+                                  sourceLabel: metric.sourceLabel ?? "Monday",
                                 })}
                               </div>
                               {isEditing ? (
@@ -632,6 +672,7 @@ export const MonthlyReportMetricsForm = ({
                                   override: manualMetricsOverrides[metric.key],
                                   snapshotValue:
                                     mondayMetricsSnapshot[metric.key],
+                                  sourceLabel: metric.sourceLabel ?? "Monday",
                                 });
                                 return hint ? (
                                   <p className="px-3 pb-1 text-[11px] text-muted-foreground">
@@ -662,6 +703,7 @@ export const MonthlyReportMetricsForm = ({
                             }),
                             snapshotValue: mondayMetricsSnapshot[metric.key],
                             effectiveValue: currentMetrics[metric.key],
+                            sourceLabel: metric.sourceLabel ?? "Monday",
                           })}
                         </div>
                         <input
@@ -736,6 +778,7 @@ export const MonthlyReportMetricsForm = ({
                                 override: manualMetricsOverrides[metric.key],
                                 snapshotValue:
                                   mondayMetricsSnapshot[metric.key],
+                                sourceLabel: metric.sourceLabel ?? "Monday",
                               });
                               return hint ? (
                                 <p className="mt-1 text-[11px] text-muted-foreground">
