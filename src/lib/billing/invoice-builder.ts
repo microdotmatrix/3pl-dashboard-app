@@ -54,7 +54,7 @@ export const buildInvoiceParams = (
 ): CreateZohoInvoiceParams => {
   const report = detail.report;
 
-  const lineItems: ZohoLineItem[] = [
+  const baseLineItems: ZohoLineItem[] = [
     {
       sku: "3PL-STORAGE-SM",
       name: "Storage – Small Bin",
@@ -127,6 +127,20 @@ export const buildInvoiceParams = (
       quantity: report.manualMetrics.specialProjectHours,
     },
   ];
+
+  // Fatass-only: combined 3PL + drop-ship shipments counted from Zoho sales
+  // orders. No rate — resolveZohoItemIds falls back to the Zoho item's rate.
+  const lineItems: ZohoLineItem[] =
+    accountSlug === "fatass"
+      ? [
+          ...baseLineItems,
+          {
+            sku: "3PL-HANDLING-RETAIL",
+            name: "Special Handling Fee - Retail Order",
+            quantity: report.manualMetrics.specialUseCaseOrdersCount,
+          },
+        ]
+      : baseLineItems;
 
   return {
     customerId: getZohoContactIdForSlug(accountSlug),

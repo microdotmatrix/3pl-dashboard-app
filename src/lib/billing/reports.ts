@@ -1087,6 +1087,14 @@ export const exportMonthlyBillingReportCsv = async ({
       "Special project hours",
       report.report.manualMetrics.specialProjectHours.toFixed(2),
     ],
+    ...(report.report.account.slug === "fatass"
+      ? [
+          [
+            "Special use case orders",
+            report.report.manualMetrics.specialUseCaseOrdersCount,
+          ],
+        ]
+      : []),
     ...summaryLines,
     [],
     [
