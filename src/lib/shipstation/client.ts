@@ -99,6 +99,14 @@ export type ShipstationClient = {
     params?: ListShipmentsParams,
   ) => Promise<ShipstationListResponse>;
   listShipmentsByUrl: (url: string) => Promise<ShipstationListResponse>;
+  listPackageTypes: () => Promise<ShipstationPackageTypesResponse>;
+  createPackageType: (
+    packageType: ShipstationPackageTypeInput,
+  ) => Promise<ShipstationPackageType>;
+  updatePackageType: (
+    packageId: string,
+    packageType: ShipstationPackageTypeInput,
+  ) => Promise<void>;
 };
 
 const MAX_RETRIES = 5;
@@ -142,19 +150,66 @@ const buildListUrl = (params: ListShipmentsParams): string => {
   return url.toString();
 };
 
-const fetchWithRetry = async (
+const dimensionSchema = z.object({
+  unit: z.string().optional(),
+  units: z.string().optional(),
+  length: z.number(),
+  width: z.number(),
+  height: z.number(),
+});
+
+export const shipstationPackageTypeSchema = z.object({
+  package_id: z.string(),
+  package_code: z.string(),
+  name: z.string(),
+  dimensions: dimensionSchema,
+  description: z.string().nullable().optional(),
+});
+
+export type ShipstationPackageType = z.infer<
+  typeof shipstationPackageTypeSchema
+>;
+
+export const shipstationPackageTypesResponseSchema = z.object({
+  packages: z.array(shipstationPackageTypeSchema),
+});
+
+export type ShipstationPackageTypesResponse = z.infer<
+  typeof shipstationPackageTypesResponseSchema
+>;
+
+export type ShipstationPackageTypeInput = {
+  package_code: string;
+  name: string;
+  dimensions: {
+    unit: "inch";
+    length: number;
+    width: number;
+    height: number;
+  };
+  description: string;
+};
+
+const requestWithRetry = async (
   url: string,
   apiKey: string,
+  init: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: BodyInit | null;
+  } = {},
 ): Promise<unknown> => {
   let attempt = 0;
 
   while (true) {
     const response = await fetch(url, {
-      method: "GET",
+      method: init.method ?? "GET",
       headers: {
         "API-Key": apiKey,
         Accept: "application/json",
+        ...init.headers,
       },
+      body: init.body,
       cache: "no-store",
     });
 
@@ -180,6 +235,10 @@ const fetchWithRetry = async (
       );
     }
 
+    if (response.status === 204) {
+      return undefined;
+    }
+
     return response.json();
   }
 };
@@ -192,13 +251,39 @@ export const createShipstationClient = ({
   accountSlug: string;
 }): ShipstationClient => {
   const fetchList = async (url: string): Promise<ShipstationListResponse> => {
-    const raw = await fetchWithRetry(url, apiKey);
+    const raw = await requestWithRetry(url, apiKey);
     return shipstationListResponseSchema.parse(raw);
   };
+
+  const fetchPackageTypes =
+    async (): Promise<ShipstationPackageTypesResponse> => {
+      const raw = await requestWithRetry(`${BASE_URL}/packages`, apiKey);
+      return shipstationPackageTypesResponseSchema.parse(raw);
+    };
 
   return {
     accountSlug,
     listShipments: (params = {}) => fetchList(buildListUrl(params)),
     listShipmentsByUrl: (url) => fetchList(url),
+    listPackageTypes: fetchPackageTypes,
+    createPackageType: async (packageType) => {
+      const raw = await requestWithRetry(`${BASE_URL}/packages`, apiKey, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(packageType),
+      });
+      return shipstationPackageTypeSchema.parse(raw);
+    },
+    updatePackageType: async (packageId, packageType) => {
+      await requestWithRetry(
+        `${BASE_URL}/packages/${encodeURIComponent(packageId)}`,
+        apiKey,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(packageType),
+        },
+      );
+    },
   };
 };

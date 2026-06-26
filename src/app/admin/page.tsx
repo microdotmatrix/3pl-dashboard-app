@@ -4,6 +4,7 @@ import Link from "next/link";
 import { CopyButton } from "@/components/admin/copy-button";
 import { InviteForm } from "@/components/admin/invite-form";
 import { RevokeInviteButton } from "@/components/admin/invite-row-actions";
+import { ShipstationPackageSyncButton } from "@/components/admin/shipstation-package-sync-button";
 import { ShipstationSyncButton } from "@/components/admin/shipstation-sync-button";
 import { UserActionButton } from "@/components/admin/user-row-actions";
 import { Badge } from "@/components/ui/badge";
@@ -230,7 +231,10 @@ const AdminDashboardPage = async () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <ShipstationSyncButton />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <ShipstationSyncButton />
+            <ShipstationPackageSyncButton />
+          </div>
           <Table>
             <TableHeader>
               <TableRow>

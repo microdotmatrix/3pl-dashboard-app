@@ -1,7 +1,10 @@
 "use server";
 
 import { requireAdmin } from "@/lib/auth/access";
-
+import {
+  type PackagePresetSyncResult,
+  syncPackagePresetsForAllAccounts,
+} from "./package-presets";
 import { type SyncResult, syncAllAccounts } from "./sync";
 
 export const triggerShipstationSync = async (): Promise<{
@@ -14,6 +17,22 @@ export const triggerShipstationSync = async (): Promise<{
 
   return {
     ok: results.every((result) => result.error === null),
+    results,
+  };
+};
+
+export const triggerShipstationPackagePresetSync = async (): Promise<{
+  ok: boolean;
+  packageCount: number;
+  results: PackagePresetSyncResult[];
+}> => {
+  await requireAdmin();
+
+  const { packageCount, results } = await syncPackagePresetsForAllAccounts();
+
+  return {
+    ok: results.every((result) => result.error === null),
+    packageCount,
     results,
   };
 };
