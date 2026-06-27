@@ -6,13 +6,13 @@ const DIMENSION_PRECISION = 3;
 const MAX_PACKAGE_NAME_LENGTH = 50;
 
 const truncatePackageName = (name: string): string => {
-  const trimmed = name.trim();
+  const normalized = name.trim().replace(/#/g, "No. ").replace(/\s+/g, " ");
 
-  if (trimmed.length <= MAX_PACKAGE_NAME_LENGTH) {
-    return trimmed;
+  if (normalized.length <= MAX_PACKAGE_NAME_LENGTH) {
+    return normalized;
   }
 
-  return trimmed.slice(0, MAX_PACKAGE_NAME_LENGTH).trimEnd();
+  return normalized.slice(0, MAX_PACKAGE_NAME_LENGTH).trimEnd();
 };
 
 const roundDimension = (value: number): number =>

@@ -267,23 +267,35 @@ export const createShipstationClient = ({
     listShipmentsByUrl: (url) => fetchList(url),
     listPackageTypes: fetchPackageTypes,
     createPackageType: async (packageType) => {
-      const raw = await requestWithRetry(`${BASE_URL}/packages`, apiKey, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(packageType),
-      });
-      return shipstationPackageTypeSchema.parse(raw);
-    },
-    updatePackageType: async (packageId, packageType) => {
-      await requestWithRetry(
-        `${BASE_URL}/packages/${encodeURIComponent(packageId)}`,
-        apiKey,
-        {
-          method: "PUT",
+      try {
+        const raw = await requestWithRetry(`${BASE_URL}/packages/`, apiKey, {
+          method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(packageType),
-        },
-      );
+        });
+        return shipstationPackageTypeSchema.parse(raw);
+      } catch (error) {
+        throw new Error(
+          `Failed to create ShipStation package preset ${packageType.package_code} (${packageType.name}) with payload ${JSON.stringify(packageType)}: ${error instanceof Error ? error.message : "Unknown ShipStation package create error."}`,
+        );
+      }
+    },
+    updatePackageType: async (packageId, packageType) => {
+      try {
+        await requestWithRetry(
+          `${BASE_URL}/packages/${encodeURIComponent(packageId)}`,
+          apiKey,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(packageType),
+          },
+        );
+      } catch (error) {
+        throw new Error(
+          `Failed to update ShipStation package preset ${packageType.package_code} (${packageType.name}) at ${packageId} with payload ${JSON.stringify(packageType)}: ${error instanceof Error ? error.message : "Unknown ShipStation package update error."}`,
+        );
+      }
     },
   };
 };

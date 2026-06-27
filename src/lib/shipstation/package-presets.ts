@@ -76,6 +76,10 @@ const syncAccountPackagePresets = async ({
       const current = existingByCode.get(desiredPackage.package_code);
 
       if (!current) {
+        console.info("Creating ShipStation package preset", {
+          accountSlug: account.slug,
+          packagePayload: desiredPackage,
+        });
         await client.createPackageType(desiredPackage);
         created += 1;
         continue;
@@ -98,6 +102,11 @@ const syncAccountPackagePresets = async ({
       error: null,
     };
   } catch (error) {
+    console.error(
+      "Error syncing package presets for account",
+      account.slug,
+      error,
+    );
     return {
       accountSlug: account.slug,
       created: 0,

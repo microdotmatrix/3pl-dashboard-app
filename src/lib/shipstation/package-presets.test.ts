@@ -43,4 +43,18 @@ describe("buildPackagePresetInput", () => {
     );
     expect(input.name).toHaveLength(50);
   });
+
+  it("normalizes number-sign package names for ShipStation", () => {
+    const input = buildPackagePresetInput({
+      label: "#0 Envelope",
+      length: 10,
+      width: 5,
+      height: 1,
+      cost: 4,
+      normalizedKey: "10.000x5.000x1.000",
+      sourceRowNumber: 11922319712,
+    });
+
+    expect(input.name).toBe("No. 0 Envelope");
+  });
 });
