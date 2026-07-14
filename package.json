@@ -9,6 +9,7 @@
     "lint": "biome check",
     "format": "biome format --write",
     "test": "vitest run",
+    "shipstation:backfill-items": "pnpm exec tsx scripts/backfill-shipstation-items.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
