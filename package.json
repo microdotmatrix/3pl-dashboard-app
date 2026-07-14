@@ -9,7 +9,7 @@
     "lint": "biome check",
     "format": "biome format --write",
     "test": "vitest run",
-    "shipstation:backfill-items": "pnpm exec tsx scripts/backfill-shipstation-items.ts",
+    "shipstation:backfill-items": "tsx scripts/backfill-shipstation-items.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
@@ -78,6 +78,7 @@
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.10",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5",
     "vitest": "^4.1.8"
   }

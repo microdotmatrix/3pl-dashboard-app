@@ -61,7 +61,7 @@ export const backfillMissingShipmentItemsForAccount = async ({
 
   const filters = [
     eq(shipstationShipment.accountId, account.id),
-    sql`not (${shipstationShipment.raw} ? 'items')`,
+    sql`coalesce(jsonb_typeof(${shipstationShipment.raw}->'items'), 'null') <> 'array'`,
   ];
 
   if (from) {
