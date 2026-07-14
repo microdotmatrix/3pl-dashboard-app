@@ -18,9 +18,7 @@ import {
   getShipstationAccounts,
   type ShipstationAccountWithKey,
 } from "./accounts";
-import {
-  createShipstationClient,
-} from "./client";
+import { createShipstationClient } from "./client";
 import type { ShipstationShipmentPayload } from "./shipment-payload";
 
 const RESOURCE = "shipments" as const;

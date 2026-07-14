@@ -14,8 +14,6 @@ import {
 } from "@/db/schema/shipstation";
 
 import { voidZohoInvoice } from "@/lib/zoho/books";
-import { getUnitsPickedFromRawShipment } from "./units-picked";
-
 import { getRequiredBillingShipmentTagNames } from "./config";
 import { matchShipmentPackages } from "./dimension-match";
 import {
@@ -35,6 +33,7 @@ import type {
   BillingShipmentMatchStatus,
 } from "./types";
 import { EMPTY_OVERRIDES } from "./types";
+import { getUnitsPickedFromRawShipment } from "./units-picked";
 
 const BILLABLE_STATUS = "label_purchased";
 const RYOT_B2B_PREFIX = "B2B";
@@ -932,8 +931,7 @@ export const getMonthlyBillingReport = async ({
 
     return {
       ...shipment,
-      unitsPicked:
-        row.unitsPicked ?? getUnitsPickedFromRawShipment(raw) ?? 0,
+      unitsPicked: row.unitsPicked ?? getUnitsPickedFromRawShipment(raw) ?? 0,
       packagingCostTotal: moneyToNumber(row.packagingCostTotal),
       matchStatus: row.matchStatus as BillingShipmentMatchStatus,
       packageMatches: row.packageMatches as BillingPackageMatch[],
