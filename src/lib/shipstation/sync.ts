@@ -20,8 +20,8 @@ import {
 } from "./accounts";
 import {
   createShipstationClient,
-  type ShipstationShipmentPayload,
 } from "./client";
+import type { ShipstationShipmentPayload } from "./shipment-payload";
 
 const RESOURCE = "shipments" as const;
 const OVERLAP_MS = 2 * 60 * 1000;
@@ -253,7 +253,9 @@ export const syncAccountShipments = async (
               tags: row.tags,
               totalWeight: row.totalWeight,
               packageCount: row.packageCount,
-              raw: row.raw,
+              // Preserve richer fields from a previous detail response when a
+              // list response omits them; incoming fields still take priority.
+              raw: sql`${shipstationShipment.raw} || excluded.raw`,
               syncedAt: new Date(),
             },
           });

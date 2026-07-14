@@ -14,6 +14,7 @@ import {
 } from "@/db/schema/shipstation";
 
 import { voidZohoInvoice } from "@/lib/zoho/books";
+import { getUnitsPickedFromRawShipment } from "./units-picked";
 
 import { getRequiredBillingShipmentTagNames } from "./config";
 import { matchShipmentPackages } from "./dimension-match";
@@ -43,54 +44,6 @@ const moneyToStorage = (value: number) => value.toFixed(2);
 const moneyToNumber = (value: string) => Number(value);
 
 const normalizeShipmentTagName = (value: string) => value.trim().toLowerCase();
-
-const parseNumericValue = (value: unknown) => {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  return null;
-};
-
-const getUnitsPickedFromRawShipment = (raw: unknown) => {
-  if (!raw || typeof raw !== "object" || !("items" in raw)) {
-    return 0;
-  }
-
-  const items = (raw as { items?: unknown }).items;
-  if (!Array.isArray(items)) {
-    return 0;
-  }
-
-  return items.reduce((sum, item) => {
-    if (!item || typeof item !== "object") {
-      return sum;
-    }
-
-    const quantity = parseNumericValue(
-      (item as { quantity?: unknown }).quantity,
-    );
-    if (quantity === null || quantity <= 0) {
-      return sum;
-    }
-
-    const unitPrice = parseNumericValue(
-      (item as { unit_price?: unknown }).unit_price,
-    );
-
-    // ShipStation can include adjustment rows like discounts in `items`.
-    if (unitPrice !== null && unitPrice < 0) {
-      return sum;
-    }
-
-    return sum + quantity;
-  }, 0);
-};
 
 const shipmentMatchesRequiredTags = (
   tags: Array<{ name: string }> | null | undefined,
@@ -407,11 +360,18 @@ export const generateMonthlyBillingReport = async ({
         rateRows,
       });
 
+      const unitsPicked = getUnitsPickedFromRawShipment(shipment.raw);
+      if (unitsPicked === null) {
+        throw new Error(
+          `Cannot generate ${formatPeriodLabel(periodStart)} for ${account.displayName}: ShipStation shipment ${shipment.externalId} is missing line-item data. Backfill shipment items, sync again, and retry.`,
+        );
+      }
+
       return {
         shipment,
         evaluation,
         billableDate: shipment.shipDate ?? shipment.createdAtRemote,
-        unitsPicked: getUnitsPickedFromRawShipment(shipment.raw),
+        unitsPicked,
       };
     });
 
@@ -972,7 +932,8 @@ export const getMonthlyBillingReport = async ({
 
     return {
       ...shipment,
-      unitsPicked: row.unitsPicked ?? getUnitsPickedFromRawShipment(raw),
+      unitsPicked:
+        row.unitsPicked ?? getUnitsPickedFromRawShipment(raw) ?? 0,
       packagingCostTotal: moneyToNumber(row.packagingCostTotal),
       matchStatus: row.matchStatus as BillingShipmentMatchStatus,
       packageMatches: row.packageMatches as BillingPackageMatch[],

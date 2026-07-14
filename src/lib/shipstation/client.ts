@@ -2,62 +2,12 @@ import "server-only";
 
 import { z } from "zod";
 
+import {
+  type ShipstationShipmentPayload,
+  shipstationShipmentSchema,
+} from "./shipment-payload";
+
 const BASE_URL = "https://api.shipstation.com/v2";
-
-const shipToSchema = z
-  .object({
-    name: z.string().nullable().optional(),
-    phone: z.string().nullable().optional(),
-    company_name: z.string().nullable().optional(),
-    address_line1: z.string().nullable().optional(),
-    address_line2: z.string().nullable().optional(),
-    address_line3: z.string().nullable().optional(),
-    city_locality: z.string().nullable().optional(),
-    state_province: z.string().nullable().optional(),
-    postal_code: z.string().nullable().optional(),
-    country_code: z.string().nullable().optional(),
-    address_residential_indicator: z
-      .enum(["yes", "no", "unknown"])
-      .nullable()
-      .optional(),
-  })
-  .nullable()
-  .optional();
-
-const tagSchema = z.object({ name: z.string() });
-
-const weightSchema = z
-  .object({
-    value: z.number(),
-    // V2 docs disagree: list response uses `units`, get-by-id uses `unit`.
-    // Accept either and normalize at the call site if ever needed.
-    units: z.string().optional(),
-    unit: z.string().optional(),
-  })
-  .nullable()
-  .optional();
-
-export const shipstationShipmentSchema = z.object({
-  shipment_id: z.string(),
-  shipment_number: z.string().nullable().optional(),
-  external_shipment_id: z.string().nullable().optional(),
-  shipment_status: z.string(),
-  carrier_id: z.string().nullable().optional(),
-  service_code: z.string().nullable().optional(),
-  ship_date: z.string().nullable().optional(),
-  created_at: z.string(),
-  modified_at: z.string(),
-  ship_to: shipToSchema,
-  ship_from: shipToSchema,
-  warehouse_id: z.string().nullable().optional(),
-  tags: z.array(tagSchema).nullable().optional(),
-  total_weight: weightSchema,
-  packages: z.array(z.unknown()).nullable().optional(),
-});
-
-export type ShipstationShipmentPayload = z.infer<
-  typeof shipstationShipmentSchema
->;
 
 const linkSchema = z.union([
   z.object({ href: z.string() }),
@@ -99,6 +49,9 @@ export type ShipstationClient = {
     params?: ListShipmentsParams,
   ) => Promise<ShipstationListResponse>;
   listShipmentsByUrl: (url: string) => Promise<ShipstationListResponse>;
+  getShipmentById: (
+    shipmentId: string,
+  ) => Promise<ShipstationShipmentPayload>;
   listPackageTypes: () => Promise<ShipstationPackageTypesResponse>;
   createPackageType: (
     packageType: ShipstationPackageTypeInput,
@@ -265,6 +218,13 @@ export const createShipstationClient = ({
     accountSlug,
     listShipments: (params = {}) => fetchList(buildListUrl(params)),
     listShipmentsByUrl: (url) => fetchList(url),
+    getShipmentById: async (shipmentId) => {
+      const raw = await requestWithRetry(
+        `${BASE_URL}/shipments/${encodeURIComponent(shipmentId)}`,
+        apiKey,
+      );
+      return shipstationShipmentSchema.parse(raw);
+    },
     listPackageTypes: fetchPackageTypes,
     createPackageType: async (packageType) => {
       try {
