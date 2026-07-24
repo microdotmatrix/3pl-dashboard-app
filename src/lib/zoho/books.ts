@@ -111,9 +111,7 @@ const getErrorResponse = (error: unknown): ZohoProxyRecord | null => {
     ? membraneErrorData.data
     : null;
 
-  return isRecord(membraneContext?.response)
-    ? membraneContext.response
-    : null;
+  return isRecord(membraneContext?.response) ? membraneContext.response : null;
 };
 
 const getErrorStatus = (error: unknown): number | null =>
