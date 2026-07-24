@@ -97,8 +97,37 @@ const asNumber = (value: unknown): number | null => {
 
 const isNonNull = <T>(value: T | null): value is T => value !== null;
 
+const getErrorResponse = (error: unknown): ZohoProxyRecord | null => {
+  if (!isRecord(error)) {
+    return null;
+  }
+
+  if (isRecord(error.response)) {
+    return error.response;
+  }
+
+  const membraneErrorData = isRecord(error.data) ? error.data : null;
+  const membraneContext = isRecord(membraneErrorData?.data)
+    ? membraneErrorData.data
+    : null;
+
+  return isRecord(membraneContext?.response)
+    ? membraneContext.response
+    : null;
+};
+
+const getErrorStatus = (error: unknown): number | null =>
+  asNumber(getErrorResponse(error)?.status);
+
 export const getErrorMessage = (error: unknown): string => {
   if (isRecord(error)) {
+    const response = getErrorResponse(error);
+    const responseData = isRecord(response?.data) ? response.data : null;
+    const responseMessage = asString(responseData?.message);
+    if (responseMessage) {
+      return responseMessage;
+    }
+
     const data = isRecord(error.data) ? error.data : null;
     const nested = asString(data?.message);
     if (nested) {
@@ -362,9 +391,11 @@ export const voidZohoInvoice = async (invoiceId: string): Promise<void> => {
     }
 
     if (
+      getErrorStatus(error) === 404 ||
       lowered.includes("invoice does not exist") ||
       lowered.includes("invalid invoice id") ||
-      lowered.includes("invoice not found")
+      lowered.includes("invoice not found") ||
+      lowered.includes("resource does not exist")
     ) {
       console.warn(
         `voidZohoInvoice: invoice ${invoiceId} not found in Zoho; treating as already gone.`,
