@@ -4,7 +4,11 @@ import type { MonthlyBillingReportDetail } from "@/lib/billing/reports";
 import type { BillingAccountSlug } from "@/lib/billing/types";
 import type { CreateZohoInvoiceParams, ZohoLineItem } from "@/lib/zoho/books";
 import { getZohoContactIdForSlug } from "@/lib/zoho/contact-map";
+import { getZohoPriceListIdForSlug } from "@/lib/zoho/price-list-map";
 
+// Default rates, used for accounts with no price list in
+// `src/lib/zoho/price-list-map.ts`. Accounts that do have one are billed at
+// their price list's rates instead.
 const LINE_RATES = {
   storageSmall: 1.5,
   storageMedium: 1.75,
@@ -102,6 +106,7 @@ export const buildInvoiceParams = (
       name: "Materials / Packaging",
       rate: report.packagingCostTotal,
       quantity: 1,
+      isPassThroughCost: true,
     },
     {
       sku: "3PL-RECV-CARTON",
@@ -144,6 +149,7 @@ export const buildInvoiceParams = (
 
   return {
     customerId: getZohoContactIdForSlug(accountSlug),
+    priceListId: getZohoPriceListIdForSlug(accountSlug),
     date: today(),
     paymentTerms: 30,
     reference: formatReference(report.periodStart),

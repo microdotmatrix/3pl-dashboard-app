@@ -11,6 +11,13 @@ export type ZohoLineItem = {
   description?: string;
   rate?: number;
   quantity: number;
+  /**
+   * Marks a line whose rate is a computed pass-through cost (e.g. actual
+   * packaging spend) rather than a service rate. Price lists never override
+   * these — the price list carries 0.00 for them, which would silently drop
+   * the cost from the invoice.
+   */
+  isPassThroughCost?: boolean;
 };
 
 export type CreateZohoInvoiceParams = {
@@ -19,6 +26,8 @@ export type CreateZohoInvoiceParams = {
   paymentTerms?: number;
   reference: string;
   lineItems: ZohoLineItem[];
+  /** Zoho price list ("pricebook") ID, when the account is billed off one. */
+  priceListId?: string | null;
 };
 
 export type CreateZohoInvoiceResult = {
@@ -48,8 +57,13 @@ type ZohoItemSummary = {
 
 const ZOHO_INVOICES_PATH = "/invoices";
 const ZOHO_ITEMS_PATH = "/items";
+const ZOHO_PRICEBOOKS_PATH = "/pricebooks";
 const ITEMS_PER_PAGE = 200;
 const MAX_ITEM_PAGES = 25;
+
+// The only scheme where a price list is a flat rate per unit. "volume" and
+// "quantity" schemes price off `price_brackets`, which we do not implement.
+const SUPPORTED_PRICING_SCHEME = "unit";
 
 // "Green Box 3PL - 2026 Approved" invoice template in Zoho Books.
 const ZOHO_INVOICE_TEMPLATE_ID = "3195387000197277124";
@@ -250,8 +264,111 @@ const listZohoItemsBySkuPrefix = async (
   return collected;
 };
 
+/**
+ * Reads a price list and returns its per-item rates, keyed by Zoho item ID.
+ *
+ * Zoho honours an explicit line-item `rate` over the price list, so the rates
+ * have to be resolved here and sent on the line items — attaching
+ * `pricebook_id` alone silently leaves the default rates in place.
+ */
+const fetchZohoPriceListRates = async (
+  priceListId: string,
+): Promise<Map<string, number>> => {
+  const proxy = getZohoProxy();
+
+  let response: unknown;
+  try {
+    response = await proxy.get(`${ZOHO_PRICEBOOKS_PATH}/${priceListId}`);
+  } catch (error) {
+    throw new Error(
+      `Could not read Zoho Books price list ${priceListId}: ${getErrorMessage(error)}`,
+    );
+  }
+
+  const pricebook =
+    isRecord(response) && isRecord(response.pricebook)
+      ? response.pricebook
+      : null;
+
+  if (!pricebook) {
+    throw new Error(
+      `Zoho Books returned no price list for ID ${priceListId}. Check src/lib/zoho/price-list-map.ts.`,
+    );
+  }
+
+  const scheme = asString(pricebook.pricing_scheme);
+  if (scheme !== SUPPORTED_PRICING_SCHEME) {
+    throw new Error(
+      `Zoho Books price list "${asString(pricebook.name)?.trim() ?? priceListId}" uses the ` +
+        `"${scheme ?? "unknown"}" pricing scheme, which this app cannot price. ` +
+        `Only "${SUPPORTED_PRICING_SCHEME}" (flat rate per unit) is supported.`,
+    );
+  }
+
+  const rows = Array.isArray(pricebook.pricebook_items)
+    ? pricebook.pricebook_items
+    : [];
+
+  const rates = new Map<string, number>();
+  for (const row of rows) {
+    if (!isRecord(row)) {
+      continue;
+    }
+
+    const itemId = asString(row.item_id ?? row.itemId);
+    const rate = asNumber(row.pricebook_rate);
+
+    if (itemId && rate !== null) {
+      rates.set(itemId, rate);
+    }
+  }
+
+  return rates;
+};
+
+const resolveLineItemRate = (
+  lineItem: ZohoLineItem,
+  match: ZohoItemSummary,
+  priceListRates: Map<string, number> | null,
+): number => {
+  // A computed pass-through cost is the real amount owed; no price list or
+  // item default may replace it.
+  if (lineItem.isPassThroughCost) {
+    if (typeof lineItem.rate !== "number") {
+      throw new Error(
+        `Pass-through line "${lineItem.name}" (${lineItem.sku}) has no computed cost.`,
+      );
+    }
+
+    return lineItem.rate;
+  }
+
+  if (priceListRates) {
+    const priceListRate = priceListRates.get(match.itemId);
+
+    if (typeof priceListRate !== "number") {
+      throw new Error(
+        `Zoho Books item "${lineItem.name}" (${lineItem.sku}) is not on this account's price list. ` +
+          "Add it in Zoho Books before invoicing, or the line would bill at the wrong rate.",
+      );
+    }
+
+    return priceListRate;
+  }
+
+  const rate = lineItem.rate ?? match.rate;
+  if (typeof rate !== "number") {
+    throw new Error(
+      `Zoho Books item "${lineItem.name}" (${lineItem.sku}) does not have a configured rate.`,
+    );
+  }
+
+  return rate;
+};
+
 const resolveZohoItemIds = async (
   lineItems: ZohoLineItem[],
+  priceListRates: Map<string, number> | null,
 ): Promise<
   Array<
     ZohoLineItem & {
@@ -283,17 +400,10 @@ const resolveZohoItemIds = async (
       );
     }
 
-    const rate = lineItem.rate ?? match.rate;
-    if (typeof rate !== "number") {
-      throw new Error(
-        `Zoho Books item "${lineItem.name}" (${lineItem.sku}) does not have a configured rate.`,
-      );
-    }
-
     return {
       ...lineItem,
       itemId: match.itemId,
-      rate,
+      rate: resolveLineItemRate(lineItem, match, priceListRates),
     };
   });
 };
@@ -302,12 +412,16 @@ export const createZohoInvoice = async (
   params: CreateZohoInvoiceParams,
 ): Promise<CreateZohoInvoiceResult> => {
   const proxy = getZohoProxy();
-  const lineItems = await resolveZohoItemIds(params.lineItems);
+  const priceListRates = params.priceListId
+    ? await fetchZohoPriceListRates(params.priceListId)
+    : null;
+  const lineItems = await resolveZohoItemIds(params.lineItems, priceListRates);
 
   try {
     const response = await proxy.post(ZOHO_INVOICES_PATH, {
       customer_id: params.customerId,
       template_id: ZOHO_INVOICE_TEMPLATE_ID,
+      ...(params.priceListId ? { pricebook_id: params.priceListId } : {}),
       date: params.date,
       payment_terms: params.paymentTerms ?? 30,
       reference_number: params.reference,

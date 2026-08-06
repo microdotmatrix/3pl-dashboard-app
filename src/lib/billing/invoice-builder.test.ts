@@ -77,4 +77,30 @@ describe("buildInvoiceParams", () => {
       ).toBe(false);
     }
   });
+
+  test("ryot invoices carry the 3PL - TPB price list id", () => {
+    const params = buildInvoiceParams(makeDetail("ryot", 0), "ryot");
+
+    expect(params.priceListId).toBe("3195387000152128163");
+  });
+
+  test("accounts without a configured price list send none", () => {
+    for (const slug of ["dip", "fatass"] as const) {
+      const params = buildInvoiceParams(makeDetail(slug, 0), slug);
+
+      expect(params.priceListId).toBeNull();
+    }
+  });
+
+  // The price list carries a 0.00 rate for materials, so letting it drive that
+  // line would silently drop the whole pass-through packaging cost.
+  test("materials is the only pass-through line and keeps its computed rate", () => {
+    const params = buildInvoiceParams(makeDetail("ryot", 0), "ryot");
+    const passThrough = params.lineItems.filter(
+      (item) => item.isPassThroughCost,
+    );
+
+    expect(passThrough.map((item) => item.sku)).toEqual(["3PL-MATERIALS-COST"]);
+    expect(passThrough[0]?.rate).toBe(100);
+  });
 });
