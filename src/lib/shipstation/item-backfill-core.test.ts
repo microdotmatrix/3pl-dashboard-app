@@ -21,12 +21,65 @@ describe("backfillShipmentItems", () => {
 
     expect(result).toEqual({
       scanned: 2,
+      totalCandidates: 2,
       repaired: 0,
       failed: 0,
+      remaining: 2,
       errors: [],
     });
     expect(fetchShipment).not.toHaveBeenCalled();
     expect(persistShipment).not.toHaveBeenCalled();
+  });
+
+  it("reports candidates left beyond the batch limit so a partial run is visibly partial", async () => {
+    const fetchShipment = vi.fn(async (externalId: string) => ({
+      shipment_id: externalId,
+      items: [{ quantity: 1 }],
+    }));
+    const persistShipment = vi.fn(async () => undefined);
+
+    const result = await backfillShipmentItems({
+      candidates,
+      totalCandidates: 176,
+      apply: true,
+      fetchShipment,
+      persistShipment,
+    });
+
+    expect(result.scanned).toBe(2);
+    expect(result.repaired).toBe(2);
+    expect(result.remaining).toBe(174);
+  });
+
+  it("reports every candidate as remaining on a dry run", async () => {
+    const result = await backfillShipmentItems({
+      candidates,
+      totalCandidates: 176,
+      apply: false,
+      fetchShipment: vi.fn(),
+      persistShipment: vi.fn(),
+    });
+
+    expect(result.remaining).toBe(176);
+  });
+
+  it("counts failed repairs as still remaining", async () => {
+    const fetchShipment = vi.fn(async (externalId: string) =>
+      externalId === "se-1"
+        ? { shipment_id: externalId }
+        : { shipment_id: externalId, items: [{ quantity: 1 }] },
+    );
+
+    const result = await backfillShipmentItems({
+      candidates,
+      totalCandidates: 2,
+      apply: true,
+      fetchShipment,
+      persistShipment: vi.fn(async () => undefined),
+    });
+
+    expect(result.failed).toBe(1);
+    expect(result.remaining).toBe(1);
   });
 
   it("fetches and persists item-bearing shipment details", async () => {

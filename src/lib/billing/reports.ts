@@ -33,7 +33,14 @@ import type {
   BillingShipmentMatchStatus,
 } from "./types";
 import { EMPTY_OVERRIDES } from "./types";
-import { getUnitsPickedFromRawShipment } from "./units-picked";
+import {
+  getUnitsPickedFromRawShipment,
+  resolveShipmentUnitsPicked,
+} from "./units-picked";
+import {
+  summarizeZeroCostPackages,
+  type ZeroCostPackageSummary,
+} from "./zero-cost-packages";
 
 const BILLABLE_STATUS = "label_purchased";
 const RYOT_B2B_PREFIX = "B2B";
@@ -220,6 +227,7 @@ export type MonthlyBillingReportDetail = {
       d2cShipmentCount: number;
       totalShipmentCount: number;
     } | null;
+    zeroCostPackages: ZeroCostPackageSummary | null;
     generatedAt: Date;
     finalizedAt: Date | null;
     zohoInvoiceId: string | null;
@@ -931,7 +939,11 @@ export const getMonthlyBillingReport = async ({
 
     return {
       ...shipment,
-      unitsPicked: row.unitsPicked ?? getUnitsPickedFromRawShipment(raw) ?? 0,
+      unitsPicked: resolveShipmentUnitsPicked({
+        externalId: row.externalId,
+        storedUnitsPicked: row.unitsPicked,
+        raw,
+      }),
       packagingCostTotal: moneyToNumber(row.packagingCostTotal),
       matchStatus: row.matchStatus as BillingShipmentMatchStatus,
       packageMatches: row.packageMatches as BillingPackageMatch[],
@@ -942,6 +954,7 @@ export const getMonthlyBillingReport = async ({
     (sum, shipment) => sum + shipment.unitsPicked,
     0,
   );
+  const zeroCostPackages = summarizeZeroCostPackages(shipments);
   const manualMetrics = getManualMetricsFromRow(reportRow);
 
   const { reverterName, ...reportRest } = reportRow;
@@ -963,6 +976,7 @@ export const getMonthlyBillingReport = async ({
         (reportRow.mondayMetricsWarnings as BillingMondayMetricsWarning[]) ??
         [],
       orderChannelSummary,
+      zeroCostPackages,
       previousZohoInvoiceIds: reportRow.previousZohoInvoiceIds ?? [],
       lastRevertedByName: reverterName ?? null,
     },

@@ -45,3 +45,36 @@ export const getUnitsPickedFromRawShipment = (raw: unknown): number | null => {
     return sum + quantity;
   }, 0);
 };
+
+/**
+ * Resolves the units picked for a single report shipment row.
+ *
+ * A persisted value always wins, including a persisted `0` — that is a real
+ * measurement, not absent data. When nothing was persisted we recompute from the
+ * ShipStation payload, and if that payload has no line items we throw rather than
+ * defaulting to zero: an undetectable zero silently under-bills the pick-and-pack
+ * line, which is exactly how RYOT May 2026 shipped an invoice for 131 units
+ * instead of 6,786.
+ */
+export const resolveShipmentUnitsPicked = ({
+  externalId,
+  storedUnitsPicked,
+  raw,
+}: {
+  externalId: string;
+  storedUnitsPicked: number | null;
+  raw: unknown;
+}): number => {
+  if (storedUnitsPicked !== null) {
+    return storedUnitsPicked;
+  }
+
+  const derived = getUnitsPickedFromRawShipment(raw);
+  if (derived === null) {
+    throw new Error(
+      `ShipStation shipment ${externalId} is missing line-item data, so units picked cannot be determined. Backfill shipment items, sync again, and reload the report.`,
+    );
+  }
+
+  return derived;
+};

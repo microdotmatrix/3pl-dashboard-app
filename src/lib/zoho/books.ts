@@ -26,7 +26,6 @@ export type CreateZohoInvoiceResult = {
   invoiceNumber: string | null;
   status: string;
   total: number;
-  invoiceUrl: string | null;
 };
 
 export type ZohoInvoiceSummary = {
@@ -329,9 +328,6 @@ export const createZohoInvoice = async (
       invoiceNumber: asString(invoice.invoice_number ?? invoice.invoiceNumber),
       status: asString(invoice.status) ?? "draft",
       total: asNumber(invoice.total) ?? 0,
-      invoiceUrl:
-        asString(invoice.invoice_url ?? invoice.invoiceUrl) ??
-        buildZohoInvoiceUrl(invoiceId),
     };
   } catch (error) {
     throw new Error(getErrorMessage(error));

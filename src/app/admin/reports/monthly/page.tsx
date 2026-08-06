@@ -41,6 +41,9 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
 });
 
+// Keep the $0-package alert readable; the full set is visible in the table.
+const ZERO_COST_SHIPMENTS_SHOWN = 5;
+
 const monthFormatter = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
   month: "long",
@@ -401,6 +404,45 @@ const MonthlyReportsPage = async ({
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
+              {currentReport.report.zeroCostPackages ? (
+                <Alert variant="destructive">
+                  <AlertTitle>
+                    {currentReport.report.zeroCostPackages.packageCount === 1
+                      ? "1 package was billed $0"
+                      : `${currentReport.report.zeroCostPackages.packageCount} packages were billed $0`}
+                  </AlertTitle>
+                  <AlertDescription>
+                    <p>
+                      These packages priced neither from the master carton list
+                      nor from an estimate, so they add nothing to the packaging
+                      total. Adjust the invoice by hand if they should be
+                      charged.
+                    </p>
+                    <ul className="mt-2 list-disc pl-4">
+                      {currentReport.report.zeroCostPackages.shipments
+                        .slice(0, ZERO_COST_SHIPMENTS_SHOWN)
+                        .map((shipment) => (
+                          <li key={shipment.externalId}>
+                            {shipment.shipmentNumber ?? shipment.externalId}
+                            {" · package "}
+                            {shipment.packageIndexes.join(", ")}
+                          </li>
+                        ))}
+                    </ul>
+                    {currentReport.report.zeroCostPackages.shipmentCount >
+                    ZERO_COST_SHIPMENTS_SHOWN ? (
+                      <p className="mt-2">
+                        and{" "}
+                        {currentReport.report.zeroCostPackages.shipmentCount -
+                          ZERO_COST_SHIPMENTS_SHOWN}{" "}
+                        more shipment(s) — see the table below for rows with a
+                        $0.00 packaging cost.
+                      </p>
+                    ) : null}
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+
               {currentReport.report.unmatchedShipmentCount > 0 ? (
                 <Alert variant="destructive">
                   <AlertTitle>Exceptions need review</AlertTitle>

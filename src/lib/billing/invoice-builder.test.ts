@@ -36,6 +36,7 @@ const makeDetail = (
     mondayMetricsFetchedAt: null,
     mondayMetricsWarnings: [],
     orderChannelSummary: null,
+    zeroCostPackages: null,
     generatedAt: new Date(Date.UTC(2026, 5, 1)),
     finalizedAt: null,
     zohoInvoiceId: null,

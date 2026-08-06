@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { getUnitsPickedFromRawShipment } from "./units-picked";
+import {
+  getUnitsPickedFromRawShipment,
+  resolveShipmentUnitsPicked,
+} from "./units-picked";
 
 describe("getUnitsPickedFromRawShipment", () => {
   it("returns null when item data is missing", () => {
@@ -38,5 +41,57 @@ describe("getUnitsPickedFromRawShipment", () => {
 
   it("returns null when items is not an array", () => {
     expect(getUnitsPickedFromRawShipment({ items: null })).toBeNull();
+  });
+});
+
+describe("resolveShipmentUnitsPicked", () => {
+  it("prefers the persisted value over recomputing from raw", () => {
+    expect(
+      resolveShipmentUnitsPicked({
+        externalId: "se-1",
+        storedUnitsPicked: 7,
+        raw: { items: [{ quantity: 99, unit_price: 1 }] },
+      }),
+    ).toBe(7);
+  });
+
+  it("treats a persisted zero as a real value rather than missing data", () => {
+    expect(
+      resolveShipmentUnitsPicked({
+        externalId: "se-1",
+        storedUnitsPicked: 0,
+        raw: null,
+      }),
+    ).toBe(0);
+  });
+
+  it("recomputes from raw when no value was persisted", () => {
+    expect(
+      resolveShipmentUnitsPicked({
+        externalId: "se-1",
+        storedUnitsPicked: null,
+        raw: { items: [{ quantity: 4, unit_price: 2 }] },
+      }),
+    ).toBe(4);
+  });
+
+  it("throws instead of billing zero when units cannot be determined", () => {
+    expect(() =>
+      resolveShipmentUnitsPicked({
+        externalId: "se-362710943",
+        storedUnitsPicked: null,
+        raw: { shipment_id: "se-362710943" },
+      }),
+    ).toThrow(/se-362710943/);
+  });
+
+  it("throws when the shipment row could not be joined at all", () => {
+    expect(() =>
+      resolveShipmentUnitsPicked({
+        externalId: "se-2",
+        storedUnitsPicked: null,
+        raw: null,
+      }),
+    ).toThrow(/missing line-item data/);
   });
 });

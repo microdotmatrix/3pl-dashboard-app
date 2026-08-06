@@ -71,6 +71,13 @@ export const backfillMissingShipmentItemsForAccount = async ({
     filters.push(lt(shipstationShipment.shipDate, to));
   }
 
+  // Counted separately from the limited batch so a capped run reports the
+  // shipments it did not reach instead of looking like it finished.
+  const [totals] = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(shipstationShipment)
+    .where(and(...filters));
+
   const candidates = await db
     .select({
       id: shipstationShipment.id,
@@ -84,6 +91,7 @@ export const backfillMissingShipmentItemsForAccount = async ({
 
   return backfillShipmentItems({
     candidates,
+    totalCandidates: totals?.total ?? candidates.length,
     apply,
     fetchShipment: (externalId) =>
       fetchShipstationShipmentById({ apiKey, shipmentId: externalId }),

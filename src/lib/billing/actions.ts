@@ -447,7 +447,7 @@ export const createZohoInvoiceAction = async ({
     return {
       ok: true,
       invoiceId: invoice.invoiceId,
-      invoiceUrl: invoice.invoiceUrl ?? buildZohoInvoiceUrl(invoice.invoiceId),
+      invoiceUrl: buildZohoInvoiceUrl(invoice.invoiceId),
     };
   } catch (error) {
     return {

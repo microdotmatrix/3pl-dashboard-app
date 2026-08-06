@@ -59,6 +59,12 @@ const main = async () => {
     ),
   );
 
+  if (result.remaining > 0) {
+    console.warn(
+      `${result.remaining} shipment(s) for ${account} still have no items. Run again${apply ? "" : " with --apply"} until remaining reaches 0.`,
+    );
+  }
+
   if (result.failed > 0) {
     process.exitCode = 1;
   }

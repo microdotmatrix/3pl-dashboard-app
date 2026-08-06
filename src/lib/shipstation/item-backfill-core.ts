@@ -8,18 +8,24 @@ export type ShipmentItemBackfillCandidate = {
 
 export type ShipmentItemBackfillResult = {
   scanned: number;
+  /** Every shipment matching the filters, including those beyond this batch. */
+  totalCandidates: number;
   repaired: number;
   failed: number;
+  /** Still missing items once this batch finished; > 0 means run it again. */
+  remaining: number;
   errors: Array<{ externalId: string; message: string }>;
 };
 
 export const backfillShipmentItems = async ({
   candidates,
+  totalCandidates = candidates.length,
   apply,
   fetchShipment,
   persistShipment,
 }: {
   candidates: ShipmentItemBackfillCandidate[];
+  totalCandidates?: number;
   apply: boolean;
   fetchShipment: (externalId: string) => Promise<unknown>;
   persistShipment: (
@@ -29,8 +35,10 @@ export const backfillShipmentItems = async ({
 }): Promise<ShipmentItemBackfillResult> => {
   const result: ShipmentItemBackfillResult = {
     scanned: candidates.length,
+    totalCandidates,
     repaired: 0,
     failed: 0,
+    remaining: totalCandidates,
     errors: [],
   };
 
@@ -47,6 +55,7 @@ export const backfillShipmentItems = async ({
 
       await persistShipment(candidate, shipment);
       result.repaired += 1;
+      result.remaining -= 1;
     } catch (error) {
       result.failed += 1;
       result.errors.push({
