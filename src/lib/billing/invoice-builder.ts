@@ -1,5 +1,9 @@
 import "server-only";
 
+import {
+  getPickFeeTiers,
+  sumUnitsPickedByTier,
+} from "@/lib/billing/pick-fee-tiers";
 import type { MonthlyBillingReportDetail } from "@/lib/billing/reports";
 import type { BillingAccountSlug } from "@/lib/billing/types";
 import type { CreateZohoInvoiceParams, ZohoLineItem } from "@/lib/zoho/books";
@@ -52,6 +56,48 @@ const resolveWholesaleQty = (
   report: MonthlyBillingReportDetail["report"],
 ): number => report.orderChannelSummary?.b2bShipmentCount ?? 0;
 
+// Flat-rate accounts bill every picked unit on one SKU; tiered accounts (DIP)
+// split the same units across price-banded SKUs. Every tier line is always
+// present, even at quantity zero, so the invoice shape stays predictable.
+const buildPickAndPackLineItems = (
+  report: MonthlyBillingReportDetail["report"],
+  accountSlug: BillingAccountSlug,
+): ZohoLineItem[] => {
+  const pickFeeTiers = getPickFeeTiers(accountSlug);
+
+  if (!pickFeeTiers) {
+    return [
+      {
+        sku: "3PL-PICK-PER-ITEM-STANDARD",
+        name: "Pick & Pack Fee – Per Item",
+        rate: LINE_RATES.pickPerItem,
+        quantity: report.unitsPickedTotal,
+      },
+    ];
+  }
+
+  const byTier = report.unitsPickedByTierTotal;
+  if (!byTier) {
+    throw new Error(
+      `The ${accountSlug} report has no tiered pick-fee breakdown. Regenerate the report before creating the invoice.`,
+    );
+  }
+
+  const tieredTotal = sumUnitsPickedByTier(byTier);
+  if (tieredTotal !== report.unitsPickedTotal) {
+    throw new Error(
+      `Tiered pick-fee units (${tieredTotal}) do not match units picked (${report.unitsPickedTotal}) for ${accountSlug}. Regenerate the report before creating the invoice.`,
+    );
+  }
+
+  return pickFeeTiers.map((tier) => ({
+    sku: tier.sku,
+    name: tier.name,
+    rate: tier.rate,
+    quantity: byTier[tier.key],
+  }));
+};
+
 export const buildInvoiceParams = (
   detail: MonthlyBillingReportDetail,
   accountSlug: BillingAccountSlug,
@@ -95,12 +141,7 @@ export const buildInvoiceParams = (
       rate: LINE_RATES.orderWholesale,
       quantity: resolveWholesaleQty(report),
     },
-    {
-      sku: "3PL-PICK-PER-ITEM-STANDARD",
-      name: "Pick & Pack Fee – Per Item",
-      rate: LINE_RATES.pickPerItem,
-      quantity: report.unitsPickedTotal,
-    },
+    ...buildPickAndPackLineItems(report, accountSlug),
     {
       sku: "3PL-MATERIALS-COST",
       name: "Materials / Packaging",

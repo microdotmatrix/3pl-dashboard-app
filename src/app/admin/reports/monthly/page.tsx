@@ -29,6 +29,7 @@ import {
 import { db } from "@/db";
 import { shipstationAccount } from "@/db/schema/shipstation";
 import { isBillingRateSourceConfigured } from "@/lib/billing/config";
+import { getPickFeeTiers } from "@/lib/billing/pick-fee-tiers";
 import {
   getMonthlyBillingReportForPeriod,
   listMonthlyBillingReports,
@@ -311,6 +312,23 @@ const MonthlyReportsPage = async ({
                   },
                 ];
 
+            const pickFeeTiers = getPickFeeTiers(selectedAccount.slug);
+            const unitsByTier = currentReport.report.unitsPickedByTierTotal;
+            const tierStats =
+              pickFeeTiers && unitsByTier
+                ? pickFeeTiers.map((tier) => ({
+                    key: `units-${tier.key}`,
+                    label: `Units picked (${tier.priceRangeLabel})`,
+                    note: (
+                      <>
+                        Tiered pick fee @ {currencyFormatter.format(tier.rate)}
+                        /unit
+                      </>
+                    ),
+                    value: unitsByTier[tier.key],
+                  }))
+                : [];
+
             stats.push(
               {
                 key: "units",
@@ -318,6 +336,7 @@ const MonthlyReportsPage = async ({
                 note: "Sum of line-item quantities",
                 value: currentReport.report.unitsPickedTotal,
               },
+              ...tierStats,
               {
                 key: "packages",
                 label: "Package count",

@@ -2,11 +2,28 @@ import { describe, expect, test } from "vitest";
 
 import { buildInvoiceParams } from "./invoice-builder";
 import type { MonthlyBillingReportDetail } from "./reports";
+import type { UnitsPickedByTier } from "./types";
 import { EMPTY_OVERRIDES } from "./types";
+
+// A breakdown consistent with the default unitsPickedTotal of 25, for tests
+// that exercise dip but aren't about the tier split itself.
+const DIP_DEFAULT_TIERS: UnitsPickedByTier = {
+  tier1: 10,
+  tier2: 5,
+  tier3: 5,
+  tier4: 5,
+};
 
 const makeDetail = (
   slug: string,
   specialUseCaseOrdersCount: number,
+  {
+    unitsPickedTotal = 25,
+    unitsPickedByTierTotal = null,
+  }: {
+    unitsPickedTotal?: number;
+    unitsPickedByTierTotal?: UnitsPickedByTier | null;
+  } = {},
 ): MonthlyBillingReportDetail => ({
   report: {
     id: "report-1",
@@ -16,7 +33,8 @@ const makeDetail = (
     status: "finalized",
     sheetSourceHash: "hash",
     shipmentCount: 10,
-    unitsPickedTotal: 25,
+    unitsPickedTotal,
+    unitsPickedByTierTotal,
     packageCount: 12,
     packagingCostTotal: 100,
     unmatchedShipmentCount: 0,
@@ -71,7 +89,12 @@ describe("buildInvoiceParams", () => {
 
   test("other vendors never get the special handling line", () => {
     for (const slug of ["dip", "ryot"] as const) {
-      const params = buildInvoiceParams(makeDetail(slug, 17), slug);
+      const params = buildInvoiceParams(
+        makeDetail(slug, 17, {
+          unitsPickedByTierTotal: slug === "dip" ? DIP_DEFAULT_TIERS : null,
+        }),
+        slug,
+      );
       expect(
         params.lineItems.some((item) => item.sku === "3PL-HANDLING-RETAIL"),
       ).toBe(false);
@@ -86,10 +109,85 @@ describe("buildInvoiceParams", () => {
 
   test("accounts without a configured price list send none", () => {
     for (const slug of ["dip", "fatass"] as const) {
-      const params = buildInvoiceParams(makeDetail(slug, 0), slug);
+      const params = buildInvoiceParams(
+        makeDetail(slug, 0, {
+          unitsPickedByTierTotal: slug === "dip" ? DIP_DEFAULT_TIERS : null,
+        }),
+        slug,
+      );
 
       expect(params.priceListId).toBeNull();
     }
+  });
+
+  test("ryot and fatass bill all picked units on the standard pick SKU", () => {
+    for (const slug of ["ryot", "fatass"] as const) {
+      const params = buildInvoiceParams(makeDetail(slug, 0), slug);
+      const standard = params.lineItems.find(
+        (item) => item.sku === "3PL-PICK-PER-ITEM-STANDARD",
+      );
+
+      expect(standard?.quantity).toBe(25);
+      expect(
+        params.lineItems.some((item) => item.sku.startsWith("3PL-PNP-ITEM-")),
+      ).toBe(false);
+    }
+  });
+
+  test("dip replaces the standard pick SKU with the four tiered SKUs", () => {
+    const detail = makeDetail("dip", 0, {
+      unitsPickedTotal: 464,
+      unitsPickedByTierTotal: { tier1: 7, tier2: 88, tier3: 188, tier4: 181 },
+    });
+    const params = buildInvoiceParams(detail, "dip");
+
+    expect(
+      params.lineItems.some(
+        (item) => item.sku === "3PL-PICK-PER-ITEM-STANDARD",
+      ),
+    ).toBe(false);
+
+    const tierLines = params.lineItems.filter((item) =>
+      item.sku.startsWith("3PL-PNP-ITEM-"),
+    );
+    expect(
+      tierLines.map(({ sku, quantity, rate }) => ({ sku, quantity, rate })),
+    ).toEqual([
+      { sku: "3PL-PNP-ITEM-0001", quantity: 7, rate: 0.05 },
+      { sku: "3PL-PNP-ITEM-0102", quantity: 88, rate: 0.1 },
+      { sku: "3PL-PNP-ITEM-0255", quantity: 188, rate: 0.2 },
+      { sku: "3PL-PNP-ITEM-050X", quantity: 181, rate: 0.3 },
+    ]);
+  });
+
+  test("dip tier lines are present even at quantity zero", () => {
+    const detail = makeDetail("dip", 0, {
+      unitsPickedTotal: 12,
+      unitsPickedByTierTotal: { tier1: 0, tier2: 12, tier3: 0, tier4: 0 },
+    });
+    const params = buildInvoiceParams(detail, "dip");
+
+    expect(
+      params.lineItems.filter((item) => item.sku.startsWith("3PL-PNP-ITEM-"))
+        .length,
+    ).toBe(4);
+  });
+
+  test("dip throws when the report has no tiered breakdown", () => {
+    expect(() => buildInvoiceParams(makeDetail("dip", 0), "dip")).toThrow(
+      /tiered pick-fee breakdown/,
+    );
+  });
+
+  test("dip throws when tier quantities disagree with units picked", () => {
+    const detail = makeDetail("dip", 0, {
+      unitsPickedTotal: 100,
+      unitsPickedByTierTotal: { tier1: 1, tier2: 2, tier3: 3, tier4: 4 },
+    });
+
+    expect(() => buildInvoiceParams(detail, "dip")).toThrow(
+      /do not match units picked/,
+    );
   });
 
   // The price list carries a 0.00 rate for materials, so letting it drive that

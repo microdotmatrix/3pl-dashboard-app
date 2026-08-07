@@ -1,10 +1,17 @@
-const parseNumericValue = (value: unknown) => {
+export const parseNumericValue = (value: unknown) => {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
   }
 
   if (typeof value === "string") {
-    const parsed = Number(value);
+    // Number("") and Number("   ") are 0, not NaN — treat blank strings as
+    // absent data so downstream tier classification can refuse to guess.
+    const trimmed = value.trim();
+    if (trimmed === "") {
+      return null;
+    }
+
+    const parsed = Number(trimmed);
     return Number.isFinite(parsed) ? parsed : null;
   }
 

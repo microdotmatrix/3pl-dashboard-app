@@ -73,6 +73,12 @@ export type BillingShipmentEvaluation = {
   unmatchedPackageCount: number;
 };
 
+export const PICK_FEE_TIER_KEYS = ["tier1", "tier2", "tier3", "tier4"] as const;
+
+export type PickFeeTierKey = (typeof PICK_FEE_TIER_KEYS)[number];
+
+export type UnitsPickedByTier = Record<PickFeeTierKey, number>;
+
 export type BillingMetricKey = keyof BillingManualMetrics;
 
 export type BillingManualMetricsOverrides = Record<BillingMetricKey, boolean>;

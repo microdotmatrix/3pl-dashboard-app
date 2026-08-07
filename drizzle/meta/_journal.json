@@ -113,6 +113,13 @@
       "when": 1781227072601,
       "tag": "0015_uneven_shocker",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1786123448512,
+      "tag": "0016_uneven_dark_beast",
+      "breakpoints": true
     }
   ]
 }

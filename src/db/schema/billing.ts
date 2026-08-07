@@ -18,6 +18,7 @@ import type {
   BillingPackageMatch,
   BillingReportStatus,
   BillingShipmentMatchStatus,
+  UnitsPickedByTier,
 } from "@/lib/billing/types";
 
 import { user } from "./auth";
@@ -136,6 +137,10 @@ export const monthlyBillingReportShipment = pgTable(
     shipDate: timestamp("ship_date", { withTimezone: true }),
     status: text("status").notNull(),
     unitsPicked: integer("units_picked"),
+    // Tiered pick-fee breakdown, persisted only for accounts billed with
+    // price-tiered pick fees (DIP). Null for flat-rate accounts and for rows
+    // generated before tiering existed; readers recompute those from `raw`.
+    unitsPickedByTier: jsonb("units_picked_by_tier").$type<UnitsPickedByTier>(),
     packageCount: integer("package_count").notNull().default(0),
     packagingCostTotal: numeric("packaging_cost_total", {
       precision: 12,

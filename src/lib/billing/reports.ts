@@ -21,6 +21,12 @@ import {
   computeOverridesAgainstSnapshot,
   pullMondayMetricsForPeriod,
 } from "./monday-metrics";
+import {
+  addUnitsPickedByTier,
+  emptyUnitsPickedByTier,
+  getPickFeeTiers,
+  resolveShipmentUnitsPickedByTier,
+} from "./pick-fee-tiers";
 import { loadBillingRateSource } from "./rate-source";
 import type {
   BillingAccountSlug,
@@ -31,6 +37,7 @@ import type {
   BillingPackageMatch,
   BillingReportStatus,
   BillingShipmentMatchStatus,
+  UnitsPickedByTier,
 } from "./types";
 import { EMPTY_OVERRIDES } from "./types";
 import {
@@ -194,6 +201,7 @@ export type MonthlyBillingReportDetailRow = {
   shipDate: Date | null;
   status: string;
   unitsPicked: number;
+  unitsPickedByTier: UnitsPickedByTier | null;
   packageCount: number;
   packagingCostTotal: number;
   matchStatus: BillingShipmentMatchStatus;
@@ -214,6 +222,8 @@ export type MonthlyBillingReportDetail = {
     sheetSourceHash: string;
     shipmentCount: number;
     unitsPickedTotal: number;
+    // Tiered pick-fee totals; null for accounts billed at the flat pick rate.
+    unitsPickedByTierTotal: UnitsPickedByTier | null;
     packageCount: number;
     packagingCostTotal: number;
     unmatchedShipmentCount: number;
@@ -324,6 +334,7 @@ export const generateMonthlyBillingReport = async ({
 
   const { sourceHash, rateRows } = await loadBillingRateSource(account.slug);
   const requiredTagNames = getRequiredBillingShipmentTagNames(account.slug);
+  const pickFeeTiers = getPickFeeTiers(account.slug);
 
   const shipments = await db
     .select({
@@ -374,11 +385,23 @@ export const generateMonthlyBillingReport = async ({
         );
       }
 
+      let unitsPickedByTier: UnitsPickedByTier | null = null;
+      if (pickFeeTiers) {
+        unitsPickedByTier = resolveShipmentUnitsPickedByTier({
+          externalId: shipment.externalId,
+          storedUnitsPickedByTier: null,
+          unitsPicked,
+          raw: shipment.raw,
+          tiers: pickFeeTiers,
+        });
+      }
+
       return {
         shipment,
         evaluation,
         billableDate: shipment.shipDate ?? shipment.createdAtRemote,
         unitsPicked,
+        unitsPickedByTier,
       };
     });
 
@@ -425,20 +448,29 @@ export const generateMonthlyBillingReport = async ({
     .where(eq(monthlyBillingReportShipment.reportId, reportId));
 
   await insertShipmentRows(
-    evaluated.map(({ shipment, evaluation, billableDate, unitsPicked }) => ({
-      reportId,
-      shipmentId: shipment.id,
-      externalId: shipment.externalId,
-      shipmentNumber: shipment.shipmentNumber ?? null,
-      externalShipmentId: shipment.externalShipmentId ?? null,
-      shipDate: billableDate,
-      status: shipment.status,
-      unitsPicked,
-      packageCount: evaluation.packageCount,
-      packagingCostTotal: moneyToStorage(evaluation.packagingCostTotal),
-      matchStatus: evaluation.matchStatus,
-      packageMatches: evaluation.packageMatches,
-    })),
+    evaluated.map(
+      ({
+        shipment,
+        evaluation,
+        billableDate,
+        unitsPicked,
+        unitsPickedByTier,
+      }) => ({
+        reportId,
+        shipmentId: shipment.id,
+        externalId: shipment.externalId,
+        shipmentNumber: shipment.shipmentNumber ?? null,
+        externalShipmentId: shipment.externalShipmentId ?? null,
+        shipDate: billableDate,
+        status: shipment.status,
+        unitsPicked,
+        unitsPickedByTier,
+        packageCount: evaluation.packageCount,
+        packagingCostTotal: moneyToStorage(evaluation.packagingCostTotal),
+        matchStatus: evaluation.matchStatus,
+        packageMatches: evaluation.packageMatches,
+      }),
+    ),
   );
 
   await db
@@ -912,6 +944,7 @@ export const getMonthlyBillingReport = async ({
       shipDate: monthlyBillingReportShipment.shipDate,
       status: monthlyBillingReportShipment.status,
       unitsPicked: monthlyBillingReportShipment.unitsPicked,
+      unitsPickedByTier: monthlyBillingReportShipment.unitsPickedByTier,
       packageCount: monthlyBillingReportShipment.packageCount,
       packagingCostTotal: monthlyBillingReportShipment.packagingCostTotal,
       matchStatus: monthlyBillingReportShipment.matchStatus,
@@ -934,16 +967,29 @@ export const getMonthlyBillingReport = async ({
     shipments: shipmentRows,
   });
 
+  const pickFeeTiers = getPickFeeTiers(reportRow.account.slug);
+
   const shipments = shipmentRows.map((row) => {
     const { raw, ...shipment } = row;
 
+    const unitsPicked = resolveShipmentUnitsPicked({
+      externalId: row.externalId,
+      storedUnitsPicked: row.unitsPicked,
+      raw,
+    });
+
     return {
       ...shipment,
-      unitsPicked: resolveShipmentUnitsPicked({
-        externalId: row.externalId,
-        storedUnitsPicked: row.unitsPicked,
-        raw,
-      }),
+      unitsPicked,
+      unitsPickedByTier: pickFeeTiers
+        ? resolveShipmentUnitsPickedByTier({
+            externalId: row.externalId,
+            storedUnitsPickedByTier: row.unitsPickedByTier,
+            unitsPicked,
+            raw,
+            tiers: pickFeeTiers,
+          })
+        : null,
       packagingCostTotal: moneyToNumber(row.packagingCostTotal),
       matchStatus: row.matchStatus as BillingShipmentMatchStatus,
       packageMatches: row.packageMatches as BillingPackageMatch[],
@@ -954,6 +1000,16 @@ export const getMonthlyBillingReport = async ({
     (sum, shipment) => sum + shipment.unitsPicked,
     0,
   );
+  const unitsPickedByTierTotal = pickFeeTiers
+    ? shipments.reduce(
+        (total, shipment) =>
+          addUnitsPickedByTier(
+            total,
+            shipment.unitsPickedByTier ?? emptyUnitsPickedByTier(),
+          ),
+        emptyUnitsPickedByTier(),
+      )
+    : null;
   const zeroCostPackages = summarizeZeroCostPackages(shipments);
   const manualMetrics = getManualMetricsFromRow(reportRow);
 
@@ -964,6 +1020,7 @@ export const getMonthlyBillingReport = async ({
       ...reportRest,
       status: reportRow.status as BillingReportStatus,
       unitsPickedTotal,
+      unitsPickedByTierTotal,
       packagingCostTotal: moneyToNumber(reportRow.packagingCostTotal),
       manualMetrics,
       mondayMetricsSnapshot:
@@ -1014,6 +1071,15 @@ export const exportMonthlyBillingReportCsv = async ({
   reportId: string;
 }) => {
   const report = await getMonthlyBillingReport({ reportId });
+  const pickFeeTiers = getPickFeeTiers(report.report.account.slug);
+  const byTierTotal = report.report.unitsPickedByTierTotal;
+  const tieredPickLines =
+    pickFeeTiers && byTierTotal
+      ? pickFeeTiers.map((tier) => [
+          `Units picked (${tier.priceRangeLabel})`,
+          byTierTotal[tier.key],
+        ])
+      : [];
   const summaryLines = report.report.orderChannelSummary
     ? [
         [
@@ -1040,6 +1106,7 @@ export const exportMonthlyBillingReportCsv = async ({
     ["Finalized at", formatDate(report.report.finalizedAt)],
     ["Shipment count", report.report.shipmentCount],
     ["Units picked total", report.report.unitsPickedTotal],
+    ...tieredPickLines,
     ["Package count", report.report.packageCount],
     ["Packaging cost total", report.report.packagingCostTotal.toFixed(2)],
     ["Unmatched shipment count", report.report.unmatchedShipmentCount],
