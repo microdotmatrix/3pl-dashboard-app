@@ -107,17 +107,29 @@ describe("buildInvoiceParams", () => {
     expect(params.priceListId).toBe("3195387000152128163");
   });
 
-  test("accounts without a configured price list send none", () => {
-    for (const slug of ["dip", "fatass"] as const) {
-      const params = buildInvoiceParams(
-        makeDetail(slug, 0, {
-          unitsPickedByTierTotal: slug === "dip" ? DIP_DEFAULT_TIERS : null,
-        }),
-        slug,
-      );
+  test("dip invoices carry the 3PL -Dip Devices price list id", () => {
+    const params = buildInvoiceParams(
+      makeDetail("dip", 0, { unitsPickedByTierTotal: DIP_DEFAULT_TIERS }),
+      "dip",
+    );
 
-      expect(params.priceListId).toBeNull();
-    }
+    expect(params.priceListId).toBe("3195387000152128211");
+  });
+
+  test("each price list is bound to exactly one account", () => {
+    const dip = buildInvoiceParams(
+      makeDetail("dip", 0, { unitsPickedByTierTotal: DIP_DEFAULT_TIERS }),
+      "dip",
+    );
+    const ryot = buildInvoiceParams(makeDetail("ryot", 0), "ryot");
+
+    expect(dip.priceListId).not.toBe(ryot.priceListId);
+  });
+
+  test("accounts without a configured price list send none", () => {
+    const params = buildInvoiceParams(makeDetail("fatass", 0), "fatass");
+
+    expect(params.priceListId).toBeNull();
   });
 
   test("ryot and fatass bill all picked units on the standard pick SKU", () => {

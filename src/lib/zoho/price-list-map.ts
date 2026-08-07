@@ -17,6 +17,8 @@ export const ZOHO_PRICE_LIST_IDS: Partial<Record<BillingAccountSlug, string>> =
   {
     // "3PL - TPB"
     ryot: "3195387000152128163",
+    // "3PL -Dip Devices"
+    dip: "3195387000152128211",
   };
 
 export const getZohoPriceListIdForSlug = (
