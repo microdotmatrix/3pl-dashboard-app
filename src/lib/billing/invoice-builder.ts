@@ -26,16 +26,29 @@ const LINE_RATES = {
   specialHourly: 50.0,
 } as const;
 
-const SHORT_MONTH = new Intl.DateTimeFormat("en-US", {
-  month: "short",
+const LONG_MONTH = new Intl.DateTimeFormat("en-US", {
+  month: "long",
   timeZone: "UTC",
 });
 
+// Reference covers the period month's actionable fees plus the next month's
+// storage fees, e.g. a July report bills July actionable + August storage and
+// reads "3PL - July/August 2026". Years are shown per-month across a rollover.
 const formatReference = (periodStart: Date): string => {
-  const month = SHORT_MONTH.format(periodStart);
-  const year = periodStart.getUTCFullYear();
+  const nextMonth = new Date(
+    Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth() + 1, 1),
+  );
 
-  return `3PL - ${month} ${year}`;
+  const fromMonth = LONG_MONTH.format(periodStart);
+  const toMonth = LONG_MONTH.format(nextMonth);
+  const fromYear = periodStart.getUTCFullYear();
+  const toYear = nextMonth.getUTCFullYear();
+
+  if (fromYear === toYear) {
+    return `3PL - ${fromMonth}/${toMonth} ${fromYear}`;
+  }
+
+  return `3PL - ${fromMonth} ${fromYear}/${toMonth} ${toYear}`;
 };
 
 const today = (): string => {
