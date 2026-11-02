@@ -70,8 +70,8 @@ const resolveWholesaleQty = (
 ): number => report.orderChannelSummary?.b2bShipmentCount ?? 0;
 
 // Flat-rate accounts bill every picked unit on one SKU; tiered accounts (DIP)
-// split the same units across price-banded SKUs. Every tier line is always
-// present, even at quantity zero, so the invoice shape stays predictable.
+// split the same units across price-banded SKUs. Every tier line is built here;
+// createZohoInvoice leaves off any line with zero quantity or zero rate.
 const buildPickAndPackLineItems = (
   report: MonthlyBillingReportDetail["report"],
   accountSlug: BillingAccountSlug,

@@ -216,4 +216,54 @@ describe("createZohoInvoice price list handling", () => {
     expect(rates["item-pallet"]).toBe(30);
     expect(rates["item-materials"]).toBe(100);
   });
+
+  test("leaves off lines with zero quantity", async () => {
+    mockGet();
+
+    await createZohoInvoice({
+      ...params,
+      lineItems: [
+        ...LINE_ITEMS.filter((item) => item.sku !== "3PL-RECV-PALLET"),
+        { sku: "3PL-RECV-PALLET", name: "Pallet", quantity: 0 },
+      ],
+    });
+
+    const itemIds = getPostedBody().line_items.map(
+      (item: { item_id: string }) => item.item_id,
+    );
+    expect(itemIds).toEqual(["item-sm", "item-materials"]);
+  });
+
+  test("leaves off lines whose resolved rate is zero", async () => {
+    mockGet({
+      pricebookItems: PRICEBOOK_ITEMS.map((item) =>
+        item.item_id === "item-sm" ? { ...item, pricebook_rate: 0 } : item,
+      ),
+    });
+
+    await createZohoInvoice({
+      ...params,
+      priceListId: PRICE_LIST_ID,
+      lineItems: LINE_ITEMS.map((item) =>
+        item.sku === "3PL-MATERIALS-COST" ? { ...item, rate: 0 } : item,
+      ),
+    });
+
+    const itemIds = getPostedBody().line_items.map(
+      (item: { item_id: string }) => item.item_id,
+    );
+    expect(itemIds).toEqual(["item-pallet"]);
+  });
+
+  test("refuses to create an invoice with no chargeable lines", async () => {
+    mockGet();
+
+    await expect(
+      createZohoInvoice({
+        ...params,
+        lineItems: LINE_ITEMS.map((item) => ({ ...item, quantity: 0 })),
+      }),
+    ).rejects.toThrow(/no chargeable line items/i);
+    expect(proxyPost).not.toHaveBeenCalled();
+  });
 });

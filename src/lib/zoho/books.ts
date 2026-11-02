@@ -415,7 +415,22 @@ export const createZohoInvoice = async (
   const priceListRates = params.priceListId
     ? await fetchZohoPriceListRates(params.priceListId)
     : null;
-  const lineItems = await resolveZohoItemIds(params.lineItems, priceListRates);
+  // Every line is resolved first so missing items and price-list gaps still
+  // fail loudly. Then lines with nothing to charge (zero quantity or zero
+  // resolved rate) are left off the invoice.
+  const resolvedLineItems = await resolveZohoItemIds(
+    params.lineItems,
+    priceListRates,
+  );
+  const lineItems = resolvedLineItems.filter(
+    (item) => item.quantity !== 0 && item.rate !== 0,
+  );
+
+  if (lineItems.length === 0) {
+    throw new Error(
+      "Invoice has no chargeable line items: every line has zero quantity or zero rate.",
+    );
+  }
 
   try {
     const response = await proxy.post(ZOHO_INVOICES_PATH, {
